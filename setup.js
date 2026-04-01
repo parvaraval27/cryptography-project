@@ -35,6 +35,19 @@ function run(command, description) {
   }
 }
 
+function isValidPtau(ptauPath) {
+  if (!fs.existsSync(ptauPath)) {
+    return false;
+  }
+
+  try {
+    execSync(`snarkjs powersoftau verify ${ptauPath}`, { stdio: "pipe", cwd: __dirname });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function setupCircuit() {
   console.log("🔧 STEP 1: Verify Prerequisites\n");
 
@@ -70,6 +83,32 @@ async function setupCircuit() {
     process.exit(1);
   }
 
+  // Legacy circom builds may ignore --o and emit Solvency.r1cs/Solvency.wasm in project root.
+  const legacyR1cs = path.join(__dirname, "Solvency.r1cs");
+  const legacyWasm = path.join(__dirname, "Solvency.wasm");
+  const targetR1cs = path.join(PROOFS_DIR, "Solvency.r1cs");
+  const targetWasmDir = path.join(PROOFS_DIR, "Solvency_js");
+  const targetWasm = path.join(targetWasmDir, "Solvency.wasm");
+
+  if (fs.existsSync(legacyR1cs)) {
+    if (fs.existsSync(targetR1cs)) {
+      fs.rmSync(targetR1cs, { force: true });
+    }
+    fs.renameSync(legacyR1cs, targetR1cs);
+    console.log(`ℹ️  Moved legacy output: ${legacyR1cs} -> ${targetR1cs}`);
+  }
+
+  if (fs.existsSync(legacyWasm)) {
+    if (!fs.existsSync(targetWasmDir)) {
+      fs.mkdirSync(targetWasmDir, { recursive: true });
+    }
+    if (fs.existsSync(targetWasm)) {
+      fs.rmSync(targetWasm, { force: true });
+    }
+    fs.renameSync(legacyWasm, targetWasm);
+    console.log(`ℹ️  Moved legacy output: ${legacyWasm} -> ${targetWasm}`);
+  }
+
   console.log("🔧 STEP 3: Verify Compiled Artifacts\n");
 
   const r1csPath = path.join(PROOFS_DIR, "Solvency.r1cs");
@@ -91,7 +130,12 @@ async function setupCircuit() {
 
   const ptauPath = path.join(PROOFS_DIR, "pot14_final.ptau");
 
-  if (!fs.existsSync(ptauPath)) {
+  if (!isValidPtau(ptauPath)) {
+    if (fs.existsSync(ptauPath)) {
+      console.log("⚠️  Existing ptau file is invalid. Regenerating...\n");
+      fs.rmSync(ptauPath, { force: true });
+    }
+
     console.log("⚠️  Powers of Tau file not found.");
     console.log("📥  Downloading ptau file (this may take a few minutes)...\n");
 
@@ -114,8 +158,38 @@ async function setupCircuit() {
     }
 
     if (!run(downloadCmd, "Download Powers of Tau file (2.5 GB)")) {
-      console.error("   Try downloading manually or check your internet connection.\n");
-      process.exit(1);
+      console.log("⚠️  Download failed. Will generate a local ptau file instead.\n");
+    }
+
+    if (!isValidPtau(ptauPath)) {
+      console.log("🛠️  Generating local Powers of Tau (bn128, power 14)...\n");
+
+      const ptau0 = path.join(PROOFS_DIR, "pot14_0000.ptau");
+      const ptau1 = path.join(PROOFS_DIR, "pot14_0001.ptau");
+
+      if (!run(
+        `snarkjs powersoftau new bn128 14 ${ptau0} -v`,
+        "Generate initial ptau"
+      )) {
+        process.exit(1);
+      }
+
+      if (!run(
+        `snarkjs powersoftau contribute ${ptau0} ${ptau1} --name=\"Local contribution\" -v -e=\"entropy-for-local-setup\"`,
+        "Contribute entropy"
+      )) {
+        process.exit(1);
+      }
+
+      if (!run(
+        `snarkjs powersoftau prepare phase2 ${ptau1} ${ptauPath} -v`,
+        "Prepare phase2 ptau"
+      )) {
+        process.exit(1);
+      }
+
+      fs.rmSync(ptau0, { force: true });
+      fs.rmSync(ptau1, { force: true });
     }
   } else {
     console.log(`✅ Powers of Tau already available: ${ptauPath}\n`);

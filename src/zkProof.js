@@ -1,32 +1,62 @@
-/**
- * ZK-SNARK Solvency Proof - Pure JavaScript Implementation
- * 
- * Provides cryptographically sound proofs that sum(balances) <= reserves
- * WITHOUT requiring circom compilation (works on all platforms).
- * 
- * Uses commitment-based cryptography and hash proofs.
- */
+const fs = require("fs");
+const path = require("path");
+const snarkjs = require("snarkjs");
 
-const crypto = require('crypto');
-const SHA256 = require('crypto-js/sha256');
-const fs = require('fs');
-const path = require('path');
+const MAX_USERS = 16;
 
-/**
- * Create a cryptographic commitment to a value
- */
-function createCommitment(value, blinding) {
-  const data = value.toString() + '|' + blinding;
-  const hash1 = SHA256(data).toString();
-  const hash2 = SHA256(hash1).toString();
-  return hash2.substring(0, 64);
+function normalizeBalances(balances) {
+  if (!Array.isArray(balances)) {
+    throw new Error("balances must be an array");
+  }
+
+  if (balances.length === 0) {
+    throw new Error("At least one balance is required");
+  }
+
+  if (balances.length > MAX_USERS) {
+    throw new Error(`Circuit supports at most ${MAX_USERS} users`);
+  }
+
+  const normalized = balances.map((b) => {
+    const value = BigInt(b);
+    if (value < 0n) {
+      throw new Error("Balances must be non-negative");
+    }
+    return value;
+  });
+
+  while (normalized.length < MAX_USERS) {
+    normalized.push(0n);
+  }
+
+  return normalized;
 }
 
-/**
- * Generate zero-knowledge proof of solvencyOAF ✅ Exchange solvent
-   Total liabilities: 430 (hidden)
-   Exchange reserves: 500
- */
+function ensureArtifacts() {
+  const wasmPath = path.join(__dirname, "../proofs/Solvency_js/Solvency.wasm");
+  const zkeyPath = path.join(__dirname, "../proofs/Solvency_final.zkey");
+  const vkeyPath = path.join(__dirname, "../proofs/verification_key.json");
+
+  if (!fs.existsSync(wasmPath)) {
+    throw new Error(`Missing circuit artifact: ${wasmPath}. Run npm run setup first.`);
+  }
+
+  if (!fs.existsSync(zkeyPath)) {
+    throw new Error(`Missing proving key: ${zkeyPath}. Run npm run setup first.`);
+  }
+
+  if (!fs.existsSync(vkeyPath)) {
+    throw new Error(`Missing verification key: ${vkeyPath}. Run npm run setup first.`);
+  }
+
+  return { wasmPath, zkeyPath, vkeyPath };
+}
+
+async function verifyProof(proof, publicSignals, verificationKeyPath) {
+  const verificationKey = JSON.parse(fs.readFileSync(verificationKeyPath, "utf-8"));
+  return snarkjs.plonk.verify(verificationKey, publicSignals, proof);
+}
+
 async function generateAndProve(balances, reserves, options = {}) {
   const {
     verify = true,
@@ -34,147 +64,71 @@ async function generateAndProve(balances, reserves, options = {}) {
   } = options;
 
   try {
-    console.log("\n🔐 Generating Zero-Knowledge Solvency Proof...\n");
-
-    // Convert to BigInt
-    const balancesBigInt = balances.map(b => BigInt(b));
     const reservesBigInt = BigInt(reserves);
-
-    // Calculate sum
-    const sum = balancesBigInt.reduce((a, b) => a + b, BigInt(0));
-
-    console.log("📊 Proof Parameters:");
-    console.log(`   Users: ${balances.length}`);
-    console.log(`   Total liabilities (hidden): ${sum.toString()}`);
-    console.log(`   Exchange reserves: ${reserves.toString()}`);
-
-    if (sum > reservesBigInt) {
-      console.log("\n❌ ERROR: Total balances EXCEED reserves!");
-      console.log("   Cannot generate valid proof for insolvent exchange.");
-      throw new Error("Exchange is insolvent");
+    if (reservesBigInt < 0n) {
+      throw new Error("Reserves must be non-negative");
     }
 
-    // Generate proof
-    console.log("\n📝 Step 1: Creating commitments...");
-    const blindingFactors = balances.map(() => 
-      crypto.randomBytes(32).toString('hex')
-    );
+    const balancesNormalized = normalizeBalances(balances);
+    const actualUserCount = balances.length;
+    const totalLiabilities = balancesNormalized.reduce((a, b) => a + b, 0n);
 
-    const balanceCommitments = balances.map((balance, i) => ({
-      commitment: createCommitment(balance, blindingFactors[i]),
-      index: i
-    }));
+    console.log("\n🔐 Generating Circom zk-SNARK solvency proof...\n");
+    console.log("📊 Proof Parameters:");
+    console.log(`   Users provided: ${actualUserCount}`);
+    console.log(`   Users in circuit: ${MAX_USERS} (zero-padded if needed)`);
+    console.log(`   Total liabilities (private): ${totalLiabilities.toString()}`);
+    console.log(`   Exchange reserves (public): ${reservesBigInt.toString()}`);
 
-    console.log("✅ Balance commitments created");
+    if (totalLiabilities > reservesBigInt) {
+      throw new Error("Exchange is insolvent: liabilities exceed reserves");
+    }
 
-    console.log("🔒 Step 2: Creating proof structure...");
-    
-    const sumCommitment = SHA256(
-      balanceCommitments.map(c => c.commitment).join('|')
-    ).toString().substring(0, 64);
+    const { wasmPath, zkeyPath, vkeyPath } = ensureArtifacts();
 
-    const proof = {
-      type: "zk-solvency-proof",
-      timestamp: new Date().toISOString(),
-      balanceCommitments,
-      sumCommitment,
-      challenge: SHA256(Math.random().toString()).toString().substring(0, 32),
-      metadata: {
-        numBalances: balances.length,
-        reserves: reserves.toString(),
-        isSolvent: sum <= reservesBigInt,
-        sumHidden: true,
-        balancesHidden: true
-      }
+    const input = {
+      balances: balancesNormalized.map((b) => b.toString()),
+      reserves: reservesBigInt.toString()
     };
 
-    console.log("✅ Proof structure created");
+    console.log("\n🧠 Step 1: Computing witness + generating PLONK proof...");
+    const { proof, publicSignals } = await snarkjs.plonk.fullProve(input, wasmPath, zkeyPath);
+    console.log("✅ Proof generated");
 
-    // Save proof
-    console.log("💾 Saving proof to file...");
+    const proofEnvelope = {
+      type: "circom-plonk-solvency-proof",
+      createdAt: new Date().toISOString(),
+      metadata: {
+        maxUsers: MAX_USERS,
+        usersProvided: actualUserCount,
+        reserves: reservesBigInt.toString()
+      },
+      proof,
+      publicSignals
+    };
+
     const proofDir = path.dirname(savePath);
     if (!fs.existsSync(proofDir)) {
       fs.mkdirSync(proofDir, { recursive: true });
     }
 
-    fs.writeFileSync(savePath, JSON.stringify(proof, null, 2));
-    console.log(`✅ Proof saved to ${savePath}`);
+    fs.writeFileSync(savePath, JSON.stringify(proofEnvelope, null, 2));
+    console.log(`💾 Proof saved to ${savePath}`);
 
-    // Verify
+    let isValid = null;
     if (verify) {
-      console.log("\n✔️ Step 3: Verifying proof...");
-      const isValid = verifyProofStructure(proof);
-
-      if (isValid && proof.metadata.isSolvent) {
-        console.log(
-          `\n✨ SUCCESS: Exchange with ${balances.length} users is solvent!`
-        );
-        console.log(
-          `   Total liabilities: ${sum.toString()} (hidden from verifier)`
-        );
-        console.log(`   Exchange reserves: ${reserves.toString()}`);
-      } else {
-        console.log("\n⚠️ WARNING: Proof verification failed!");
-      }
-
-      return { proof, publicSignals: [reserves.toString()], isValid };
+      console.log("\n✔️ Step 2: Verifying proof against verification key...");
+      isValid = await verifyProof(proof, publicSignals, vkeyPath);
+      console.log(isValid ? "✅ Proof verification PASSED" : "❌ Proof verification FAILED");
     }
 
-    return { proof, publicSignals: [reserves.toString()], isValid: null };
-
+    return { proof, publicSignals, isValid };
   } catch (error) {
     console.error("❌ Error in proof generation:", error.message);
     throw error;
   }
 }
 
-/**
- * Verify proof structure and consistency
- */
-function verifyProofStructure(proof) {
-  try {
-    // Check proof structure
-    if (!proof.type || proof.type !== "zk-solvency-proof") {
-      throw new Error("Invalid proof type");
-    }
-
-    if (!proof.balanceCommitments || proof.balanceCommitments.length === 0) {
-      throw new Error("Missing balance commitments");
-    }
-
-    if (!proof.sumCommitment) {
-      throw new Error("Missing sum commitment");
-    }
-
-    if (!proof.metadata || !proof.metadata.isSolvent) {
-      return false;
-    }
-
-    // Verify sum commitment matches balance commitments
-    const expectedSumCommitment = SHA256(
-      proof.balanceCommitments.map(c => c.commitment).join('|')
-    ).toString().substring(0, 64);
-
-    if (expectedSumCommitment !== proof.sumCommitment) {
-      throw new Error("Sum commitment mismatch");
-    }
-
-    console.log("✅ Proof is valid!");
-    console.log("   ✔ Exchange is solvent (sum ≤ reserves)");
-    console.log("   ✔ Balance commitments verified");
-    console.log("   ✔ No individual balances revealed");
-
-    return true;
-
-  } catch (error) {
-    console.error("❌ Proof verification FAILED:", error.message);
-    return false;
-  }
-}
-
-/**
- * Load and verify a previously saved proof
- */
 async function loadAndVerifyProof(proofPath) {
   try {
     if (!fs.existsSync(proofPath)) {
@@ -182,15 +136,22 @@ async function loadAndVerifyProof(proofPath) {
     }
 
     const proofData = JSON.parse(fs.readFileSync(proofPath, "utf-8"));
+    const { proof, publicSignals, metadata } = proofData;
 
-    console.log(
-      `\n🔍 Verifying proof for ${proofData.metadata.numBalances} users...`
-    );
-    console.log(`   Exchange reserves: ${proofData.metadata.reserves}`);
+    if (!proof || !publicSignals) {
+      throw new Error("Invalid proof file format: missing proof/publicSignals");
+    }
 
-    const isValid = verifyProofStructure(proofData);
+    const vkeyPath = path.join(__dirname, "../proofs/verification_key.json");
+
+    console.log("\n🔍 Verifying saved Circom proof...");
+    if (metadata && metadata.reserves) {
+      console.log(`   Public reserves signal: ${metadata.reserves}`);
+    }
+
+    const isValid = await verifyProof(proof, publicSignals, vkeyPath);
+    console.log(isValid ? "✅ Proof is valid" : "❌ Proof is invalid");
     return isValid;
-
   } catch (error) {
     console.error("❌ Error loading/verifying proof:", error.message);
     throw error;
@@ -200,6 +161,7 @@ async function loadAndVerifyProof(proofPath) {
 module.exports = {
   generateAndProve,
   loadAndVerifyProof,
-  verifyProofStructure,
-  createCommitment
+  verifyProof,
+  normalizeBalances,
+  MAX_USERS
 };

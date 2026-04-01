@@ -1,5 +1,3 @@
-pragma circom 1.0.0;
-
 template RangeCheck(N) {
   signal input in;
   signal bits[N];
@@ -15,6 +13,7 @@ template RangeCheck(N) {
 template Solvency(N) {
   signal input balances[N];
   signal input reserves;
+  signal output reservesPublic;
   signal partial_sum[N];
   component balanceChecks[N];
   for (var i = 0; i < N; i++) {
@@ -31,6 +30,7 @@ template Solvency(N) {
   difference <== reserves - totalSum;
   component diffCheck = RangeCheck(256);
   diffCheck.in <== difference;
+  reservesPublic <== reserves;
 }
 
-component main = Solvency(8);
+component main = Solvency(16);

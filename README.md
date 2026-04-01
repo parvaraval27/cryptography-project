@@ -179,7 +179,7 @@ Merkle_tree/
 ├── src/
 │   ├── index.js                     # CLI application
 │   ├── merkleTree.js                # Merkle proof logic
-│   ├── solvencyProof.js             # zk-SNARK integration
+│   ├── zkProof.js                   # zk-SNARK integration
 │   └── utils.js                     # Hash functions
 ├── proofs/                          # Generated artifacts
 │   ├── Solvency.r1cs                # Constraints (compiled)
@@ -214,11 +214,11 @@ Merkle_tree/
 
 ### Customizing User Count
 
-Default: 8 users. To change:
+Default: 16 users. To change:
 
 1. Edit `circuits/Solvency.circom`:
 ```circom
-component main {public [reserves]} = Solvency(16);  // Change 8 to 16
+component main = Solvency(32);  // Change 16 to your target
 ```
 
 2. Recompile:
@@ -233,7 +233,7 @@ Currently uses **PLONK** (snarkjs default). Could also use:
 - **Fflonk** - Faster verification
 - **IPA** - Post-quantum secure (experimental)
 
-Change in `solvencyProof.js` `createProof()` and `verifyProof()` functions.
+Change in `zkProof.js` proof generation and verification functions.
 
 ### Running on AWS/Cloud
 
