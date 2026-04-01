@@ -1,0 +1,55 @@
+{
+  "type": "zk-solvency-proof",
+  "timestamp": "2026-04-01T16:49:57.326Z",
+  "balanceCommitments": [
+    {
+      "commitment": "5a9f2230cb859317b786e84292605a5a57f341c0b4b3a3ec59a4c3cd766fa371",
+      "index": 0
+    },
+    {
+      "commitment": "ba29b99e772df93d1390c5b1fe77f39d5d4fc7fae370db7d17862bf5b41f2ed9",
+      "index": 1
+    },
+    {
+      "commitment": "0ea90da780cd8c46e772e1ab6a7cef737fcc89953cb2a35326ae4d4ba116ba4e",
+      "index": 2
+    },
+    {
+      "commitment": "32f1e1b7ece008c9d8c77b7148aa9648db916fbed70be48b232b6320fd3f6ebb",
+      "index": 3
+    },
+    {
+      "commitment": "e960df73cfe4cbfaa2659d4e2b2d44d041db4e3223ea8492cc392123d1992d22",
+      "index": 4
+    },
+    {
+      "commitment": "d0cbdb888f76d0c6ccf1e04a163c62e46fcb201b6aa742fc0287aa83013826fb",
+      "index": 5
+    },
+    {
+      "commitment": "32ef0b6f1f80ced81d042808a4b0d68e106bd48ccd6e783cf20711a71a235ba9",
+      "index": 6
+    },
+    {
+      "commitment": "bb681783d3ddc991b831536a4a2e7017bcb0e997e798a22b3fe7720fbd63cb38",
+      "index": 7
+    },
+    {
+      "commitment": "8a886c6010c80b9610e5719f188d46bdd5b01a6f8e1cba3d545214dee023fbf2",
+      "index": 8
+    },
+    {
+      "commitment": "3a009e6e88f8237dedc281089e908f2286300d5684883875b683ae80135abc7d",
+      "index": 9
+    }
+  ],
+  "sumCommitment": "5e01a7d54f230c26fea667e75375a3262a707ac16bc645325a7aeb0bae42234d",
+  "challenge": "c0eaf23fd2a93c31adce4dd115fab473",
+  "metadata": {
+    "numBalances": 10,
+    "reserves": "60",
+    "isSolvent": true,
+    "sumHidden": true,
+    "balancesHidden": true
+  }
+}
