@@ -5,7 +5,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "setup": "node setup.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:start": "npm --prefix web run start",
+    "web:lint": "npm --prefix web run lint"
   },
   "keywords": [],
   "author": "",
