@@ -262,6 +262,33 @@ export function LuminousLogicMatrix({
       </section>
 
       <section className="border-b border-slate-700/60 px-4 py-4">
+        <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>Where it runs</p>
+        <h3 className="mt-1 text-[15px] font-medium text-slate-100">Prover, witness generation, verifier, and algorithm flow</h3>
+        <div className="mt-3 grid gap-px bg-slate-700/60 md:grid-cols-2 xl:grid-cols-4">
+          <article className="bg-slate-950/85 p-3 text-[12px] text-slate-200">
+            <p className={`text-[11px] font-medium uppercase tracking-[0.12em] ${secondaryTone}`}>Witness generation</p>
+            <p className="mt-2 leading-5">Runs inside the Node.js proving route when the backend prepares the witness from private balances and circuit inputs.</p>
+            <p className={`mt-2 text-[11px] ${secondaryTone}`}>Private data stays here.</p>
+          </article>
+          <article className="bg-slate-950/85 p-3 text-[12px] text-slate-200">
+            <p className={`text-[11px] font-medium uppercase tracking-[0.12em] ${secondaryTone}`}>Prover</p>
+            <p className="mt-2 leading-5">The prover is the backend proof builder in <span className="font-medium text-slate-100">src/zkProof.js</span>, called by <span className="font-medium text-slate-100">/api/zk/visualization</span>.</p>
+            <p className={`mt-2 text-[11px] ${secondaryTone}`}>It turns the witness into a zk-SNARK proof.</p>
+          </article>
+          <article className="bg-slate-950/85 p-3 text-[12px] text-slate-200">
+            <p className={`text-[11px] font-medium uppercase tracking-[0.12em] ${secondaryTone}`}>Verifier</p>
+            <p className="mt-2 leading-5">The verifier runs in <span className="font-medium text-slate-100">/api/zk/verify</span> and checks the proof against the selected verification key.</p>
+            <p className={`mt-2 text-[11px] ${secondaryTone}`}>It does not need the private balances.</p>
+          </article>
+          <article className="bg-slate-950/85 p-3 text-[12px] text-slate-200">
+            <p className={`text-[11px] font-medium uppercase tracking-[0.12em] ${secondaryTone}`}>Whole algorithm</p>
+            <p className="mt-2 leading-5">Private balances become a witness, the prover creates a proof, the UI sends the proof payload to the verifier, and only public signals such as Merkle root and reserves are exposed.</p>
+            <p className={`mt-2 text-[11px] ${secondaryTone}`}>That is the complete setup of our project.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="border-b border-slate-700/60 px-4 py-4">
         <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>Explain It To Me</p>
         <h3 className="mt-1 text-[15px] font-medium text-slate-100">What is happening here?</h3>
         <div className="mt-3 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
