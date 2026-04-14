@@ -87,15 +87,19 @@ export type ProofStepPayload = {
   step: number;
   position: "left" | "right" | "self";
   siblingHash: string;
+  siblingSum?: string;
   inputHash: string;
+  inputSum?: string;
   outputHash: string;
+  outputSum?: string;
 };
 
 export type ProofTracePayload = {
   userId: string;
   rootHash: string;
+  rootSum?: string;
   valid: boolean;
-  proof: Array<{ hash: string; position: "left" | "right" | "self" }>;
+  proof: Array<{ hash: string; position: "left" | "right" | "self"; siblingSum?: string }>;
   steps: ProofStepPayload[];
 };
 

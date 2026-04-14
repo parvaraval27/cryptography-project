@@ -8,10 +8,10 @@ This system cryptographically proves that a cryptocurrency exchange is **solvent
 
 It combines two cryptographic proofs:
 
-### 1. **Merkle Tree Proof** 🌳
+### 1. **Merkle Sum Tree Proof** 🌳
 - User proves their balance is included in the exchange's balance sheet
 - Exchange publishes a Merkle root committing to all user balances
-- User can verify their balance is in the tree without seeing other balances
+- User can verify both hash path integrity and sum consistency without seeing other balances
 
 ### 2. **zk-SNARK Solvency Proof** 🔐
 - Exchange proves: `sum(all balances) ≤ reserves`
@@ -128,7 +128,7 @@ Select mode (0-6): 2
 
 ## How It Works (Technical)
 
-### Merkle Tree Flow
+### Merkle Sum Tree Flow
 
 ```
 Step 1: Exchange builds Merkle tree from all balances
@@ -139,8 +139,8 @@ Step 2: Exchange publishes the root hash (commitment)
 Step 3: User requests inclusion proof for their balance
         Exchange provides: [sibling1, sibling2, ...]
 
-Step 4: User verifies: hash(leaf) -> combine with siblings -> should equal root
-        ✅ If match: balance is in tree
+Step 4: User verifies: hash(leaf) + sibling sums -> should match root hash and root sum
+        ✅ If match: balance is in tree and sum-path is consistent
         ❌ If no match: balance not
  included
 ```

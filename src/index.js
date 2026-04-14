@@ -164,11 +164,12 @@ function merkleVerifierMode() {
       console.log(`   ... (${proof.length} total nodes)`);
     }
 
-    const isValid = verifyProof(user, proof, root.hash);
+    const isValid = verifyProof(user, proof, root.hash, root.sum);
 
     console.log("\n✅ Verification Result:", isValid);
     if (isValid) {
       console.log(`✔️  User ${id} balance IS included in the Merkle tree`);
+      console.log("✔️  Merkle sum constraints verified up to the root");
     } else {
       console.log(`❌ User ${id} verification FAILED`);
     }
@@ -217,7 +218,7 @@ function fullVerificationMode() {
 
     const user = users.find(u => u.id === id);
     const proof = getMerkleProof(leaves, index);
-    const merkleValid = verifyProof(user, proof, root.hash);
+    const merkleValid = verifyProof(user, proof, root.hash, root.sum);
 
     console.log("\n✅ Step 1 - Merkle Verification:", merkleValid ? "PASSED" : "FAILED");
     if (merkleValid) {

@@ -57,13 +57,13 @@ function getMerkleProof(leaves, index) {
       if (i === index || i + 1 === index) {
         if (i === index && right) {
           // Left is the target, right is the sibling
-          proof.push({ hash: right.hash, position: "right" });
+          proof.push({ hash: right.hash, siblingSum: right.sum.toString(), position: "right" });
         } else if (i + 1 === index && right) {
           // Right is the target, left is the sibling
-          proof.push({ hash: left.hash, position: "left" });
+          proof.push({ hash: left.hash, siblingSum: left.sum.toString(), position: "left" });
         } else if (i === index && !right) {
           // Unpaired node hashes with itself
-          proof.push({ hash: left.hash, position: "self" });
+          proof.push({ hash: left.hash, siblingSum: left.sum.toString(), position: "self" });
         }
         // If target node is unpaired at higher levels, it will be handled the same way
         index = Math.floor(i / 2);
@@ -89,20 +89,54 @@ function getMerkleProof(leaves, index) {
 }
 
 // Step 4: Verify proof
-function verifyProof(user, proof, rootHash) {
+function verifyProof(user, proof, rootHash, expectedRootSum = null) {
   let currentHash = hashLeaf(user.id, user.balance);
+  let currentSum = BigInt(user.balance);
+  let strictMode = expectedRootSum !== null;
 
   for (let p of proof) {
     if (p.position === "right") {
       currentHash = hashNode(currentHash, p.hash);
+      if (strictMode) {
+        if (p.siblingSum === undefined) {
+          return false;
+        }
+        currentSum += BigInt(p.siblingSum);
+      }
     } else if (p.position === "left") {
       currentHash = hashNode(p.hash, currentHash);
+      if (strictMode) {
+        if (p.siblingSum === undefined) {
+          return false;
+        }
+        currentSum += BigInt(p.siblingSum);
+      }
     } else if (p.position === "self") {
       currentHash = hashNode(currentHash, currentHash);
+      if (strictMode) {
+        if (p.siblingSum === undefined) {
+          return false;
+        }
+
+        const siblingSum = BigInt(p.siblingSum);
+        if (siblingSum !== currentSum) {
+          return false;
+        }
+      }
+    } else {
+      return false;
     }
   }
 
-  return currentHash === rootHash;
+  if (currentHash !== rootHash) {
+    return false;
+  }
+
+  if (!strictMode) {
+    return true;
+  }
+
+  return currentSum === BigInt(expectedRootSum);
 }
 
 module.exports = {

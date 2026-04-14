@@ -76,10 +76,11 @@ async function demo() {
   });
 
   const aliceUser = users[aliceIndex];
-  const merkleValid = verifyProof(aliceUser, aliceMerkleProof, root.hash);
+  const merkleValid = verifyProof(aliceUser, aliceMerkleProof, root.hash, root.sum);
 
   console.log(`\n   Result: ${merkleValid ? "✅ VALID" : "❌ INVALID"}`);
   console.log(`   Alice's balance IS included in the Merkle tree`);
+  console.log(`   Root sum consistency verified: ${root.sum.toString()}`);
 
   // ═══════════════════════════════════════════════════
   // PART 2: zk-SNARK Solvency Proof
@@ -115,7 +116,7 @@ async function demo() {
     const bobIndex = leaves.findIndex(u => u.id === "Bob");
     const bobMerkleProof = getMerkleProof(leaves, bobIndex);
     const bobUser = users[bobIndex];
-    const bobMerkleValid = verifyProof(bobUser, bobMerkleProof, root.hash);
+    const bobMerkleValid = verifyProof(bobUser, bobMerkleProof, root.hash, root.sum);
 
     console.log(`   Result: ${bobMerkleValid ? "✅ VALID" : "❌ INVALID"}`);
 

@@ -96,6 +96,7 @@ function buildProofTrace(users, userId) {
   }
 
   let currentHash = hashLeaf(targetUser.id, targetUser.balance);
+  let currentSum = BigInt(targetUser.balance);
   const steps = [];
 
   for (let i = 0; i < proof.length; i += 1) {
@@ -110,25 +111,38 @@ function buildProofTrace(users, userId) {
       nextHash = hashNode(currentHash, currentHash);
     }
 
+    const siblingSum = BigInt(sibling.siblingSum ?? currentSum.toString());
+    let nextSum = currentSum;
+    if (sibling.position === "right" || sibling.position === "left") {
+      nextSum = currentSum + siblingSum;
+    } else {
+      nextSum = currentSum;
+    }
+
     steps.push({
       step: i,
       position: sibling.position,
       siblingHash: sibling.hash,
+      siblingSum: siblingSum.toString(),
       inputHash: currentHash,
-      outputHash: nextHash
+      inputSum: currentSum.toString(),
+      outputHash: nextHash,
+      outputSum: nextSum.toString(),
     });
 
     currentHash = nextHash;
+    currentSum = nextSum;
   }
 
-  const valid = verifyProof(targetUser, proof, root.hash);
+  const valid = verifyProof(targetUser, proof, root.hash, root.sum);
 
   return {
     userId,
     rootHash: root.hash,
+    rootSum: root.sum.toString(),
     valid,
     proof,
-    steps
+    steps,
   };
 }
 
