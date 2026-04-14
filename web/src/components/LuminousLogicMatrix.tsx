@@ -225,92 +225,128 @@ export function LuminousLogicMatrix({
   const ringState = resolveRingState(proverPhase);
   const circuitVariantLabel = zkPayload?.circuitVariant ? `N=${zkPayload.circuitVariant}` : "unknown";
   const couplingLabel = zkPayload?.couplingStatus ?? "missing";
+  const proofSystemNote = "Proof system: PLONK • Ceremony origin: Hermez ptau file • Regenerate with npm run setup";
+  const successTone = "text-[var(--color-text-success,#86efac)]";
+  const dangerTone = "text-[var(--color-text-danger,#fda4af)]";
+  const secondaryTone = "text-[var(--color-text-secondary,#94a3b8)]";
 
-  let verifierToneClass = "border-slate-600/40 bg-slate-900/70";
+  let verifierToneClass = "border-slate-700/70 bg-slate-950/90";
   if (verifierPhase === "passed") {
-    verifierToneClass = "border-lime-400/45 bg-lime-500/10 atlas-verifier-pass";
+    verifierToneClass = "border-[var(--color-text-success,#86efac)]/50 bg-slate-950/90 atlas-verifier-pass";
   }
   if (verifierPhase === "failed") {
-    verifierToneClass = "border-rose-400/45 bg-rose-500/10 atlas-verifier-fail";
+    verifierToneClass = "border-[var(--color-text-danger,#fda4af)]/50 bg-slate-950/90 atlas-verifier-fail";
   }
 
   const crystalShadow = resolveCrystalShadow(verifierPhase);
   const crystalScale = resolveCrystalScale(proverPhase);
 
   return (
-    <div className="mt-4 space-y-6" style={visualVars}>
+    <div className="mt-4 overflow-hidden rounded-xl border border-slate-700/60 bg-slate-950/85" style={visualVars}>
       {zkError ? (
-        <p className="rounded-xl border border-rose-300/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{zkError}</p>
+        <p className={`border-b border-slate-700/60 px-4 py-3 text-[12px] ${dangerTone}`}>{zkError}</p>
       ) : null}
 
-      {zkLoading ? <p className="text-sm text-slate-300">Synchronizing cryptographic circuit state...</p> : null}
+      {zkLoading ? <p className={`border-b border-slate-700/60 px-4 py-3 text-[12px] ${secondaryTone}`}>Synchronizing cryptographic circuit state...</p> : null}
 
-      <section className="rounded-2xl border border-cyan-400/30 bg-cyan-950/35 p-4">
-        <p className="text-xs uppercase tracking-[0.14em] text-cyan-300">Explain It To Me</p>
-        <h3 className="mt-1 text-lg font-semibold text-cyan-100">What is happening here?</h3>
-        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-200">
-          <li>
-            The system takes your <span className="font-semibold text-cyan-200">Private Balance</span> and the
-            <span className="font-semibold text-amber-200"> Public Exchange Total</span>.
-          </li>
-          <li>
-            It runs complex math to create a <span className="font-semibold text-lime-200">zk-SNARK receipt</span>, a tiny mathematical proof.
-          </li>
-          <li>
-            Anyone can verify this receipt and know your funds are included and solvent,
-            <span className="font-semibold text-cyan-200"> without seeing your balance</span>.
-          </li>
-        </ol>
+      <section className="border-b border-slate-700/60 px-4 py-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>Setup origin</p>
+            <p className="mt-1 text-[12px] font-normal text-slate-200">{proofSystemNote}</p>
+          </div>
+          <div className={`border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-[11px] font-normal ${secondaryTone}`}>
+            Public signals: Merkle root + reserves only
+          </div>
+        </div>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[0.92fr_1.2fr_0.95fr]">
-        <section className="rounded-2xl border border-slate-500/35 bg-slate-950/80 p-4">
+      <section className="border-b border-slate-700/60 px-4 py-4">
+        <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>Explain It To Me</p>
+        <h3 className="mt-1 text-[15px] font-medium text-slate-100">What is happening here?</h3>
+        <div className="mt-3 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+          <ol className="list-decimal space-y-2 pl-5 text-[12px] font-normal text-slate-200">
+            <li>
+              The system takes your <span className="font-medium text-slate-100">Private Balance</span> and the
+              <span className="font-medium text-slate-100"> Public Exchange Total</span>.
+            </li>
+            <li>
+              It runs complex math to create a <span className="font-medium text-slate-100">zk-SNARK receipt</span>, a tiny mathematical proof.
+            </li>
+            <li>
+              Anyone can verify this receipt and know your funds are included and solvent,
+              <span className="font-medium text-slate-100"> without seeing your balance</span>.
+            </li>
+          </ol>
+
+          <div className="border border-slate-700/70 bg-slate-950/80 p-3 text-[12px] text-slate-200">
+            <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>Flow summary</p>
+            <div className="mt-3 space-y-2">
+              <div className="border border-slate-700/70 bg-slate-900/70 px-3 py-2">
+                <p className={`text-[11px] font-medium uppercase tracking-[0.12em] ${secondaryTone}`}>Step 1</p>
+                <p className="mt-1 text-[12px] text-slate-100">Collect balances</p>
+              </div>
+              <div className="border border-slate-700/70 bg-slate-900/70 px-3 py-2">
+                <p className={`text-[11px] font-medium uppercase tracking-[0.12em] ${secondaryTone}`}>Step 2</p>
+                <p className="mt-1 text-[12px] text-slate-100">Commit the Merkle root</p>
+              </div>
+              <div className="border border-slate-700/70 bg-slate-900/70 px-3 py-2">
+                <p className={`text-[11px] font-medium uppercase tracking-[0.12em] ${secondaryTone}`}>Step 3</p>
+                <p className="mt-1 text-[12px] text-slate-100">Verify the proof envelope</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-px bg-slate-700/60 xl:grid-cols-[0.92fr_1.2fr_0.95fr]">
+        <section className="bg-slate-950/85 px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">Fiber-Optic Phantom Feed</p>
-            <p className="text-[11px] text-slate-400">Private inputs flow in. Public proof comes out.</p>
-            <span className="ml-auto rounded-md border border-amber-300/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-100">
+            <p className={`text-[11px] font-medium uppercase tracking-[0.16em] ${secondaryTone}`}>Input stream</p>
+            <p className={`text-[11px] ${secondaryTone}`}>Private in, public proof out.</p>
+            <span className="ml-auto border border-slate-700/70 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-200">
               root: {shortFingerprint(rootHash)}
             </span>
           </div>
 
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <article className="rounded-xl border border-cyan-400/35 bg-cyan-950/35 p-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-300">Hidden Inputs (Private)</p>
-              <div className="mt-2 rounded-lg border border-cyan-400/30 bg-slate-900/80 px-3 py-2">
-                <p className="text-xs text-slate-300">Account ID</p>
-                <p className="mt-1 font-mono text-sm text-cyan-100 blur-[1px]">{focusUser}</p>
+          <div className="mt-3 grid grid-cols-1 gap-px bg-slate-700/60 sm:grid-cols-2">
+            <article className="bg-slate-950/85 p-3">
+              <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>Hidden Inputs (Private)</p>
+              <div className="mt-2 border border-slate-700/70 bg-slate-900/80 px-3 py-2">
+                <p className={`text-[11px] ${secondaryTone}`}>Account ID</p>
+                <p className="mt-1 font-mono text-[12px] text-slate-100 blur-[1px]">{focusUser}</p>
               </div>
-              <div className="mt-2 rounded-lg border border-cyan-400/30 bg-slate-900/80 px-3 py-2">
-                <p className="text-xs text-slate-300">Exact Balance</p>
-                <p className="mt-1 font-mono text-sm text-cyan-100 blur-[1px]">{focusBalance}</p>
+              <div className="mt-2 border border-slate-700/70 bg-slate-900/80 px-3 py-2">
+                <p className={`text-[11px] ${secondaryTone}`}>Exact Balance</p>
+                <p className="mt-1 font-mono text-[12px] text-slate-100 blur-[1px]">{focusBalance}</p>
               </div>
-              <p className="mt-2 text-[11px] text-cyan-200/85">Locked in a digital envelope before proving.</p>
+              <p className={`mt-2 text-[11px] ${secondaryTone}`}>Locked before proving.</p>
             </article>
 
-            <article className="rounded-xl border border-lime-400/35 bg-lime-950/25 p-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-lime-300">Public Inputs (Transparent)</p>
-              <div className="mt-2 rounded-lg border border-lime-400/30 bg-slate-900/80 px-3 py-2">
-                <p className="text-xs text-slate-300">Merkle Root</p>
-                <p className="mt-1 font-mono text-sm text-lime-100">{shortFingerprint(rootHash)}</p>
+            <article className="bg-slate-950/85 p-3">
+              <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>Public Inputs (Transparent)</p>
+              <div className="mt-2 border border-slate-700/70 bg-slate-900/80 px-3 py-2">
+                <p className={`text-[11px] ${secondaryTone}`}>Merkle Root</p>
+                <p className="mt-1 font-mono text-[12px] text-slate-100">{shortFingerprint(rootHash)}</p>
               </div>
-              <div className="mt-2 rounded-lg border border-lime-400/30 bg-slate-900/80 px-3 py-2">
-                <p className="text-xs text-slate-300">Total Exchange Reserves</p>
-                <p className="mt-1 text-sm font-semibold text-amber-200">{zkPayload?.metadata.reserves ?? "-"}</p>
+              <div className="mt-2 border border-slate-700/70 bg-slate-900/80 px-3 py-2">
+                <p className={`text-[11px] ${secondaryTone}`}>Total Exchange Reserves</p>
+                <p className="mt-1 text-[12px] font-medium text-slate-100">{zkPayload?.metadata.reserves ?? "-"}</p>
               </div>
-              <p className="mt-2 text-[11px] text-lime-200/90">Visible to everyone and used for instant checks.</p>
+              <p className={`mt-2 text-[11px] ${secondaryTone}`}>Visible and verifier-readable.</p>
             </article>
           </div>
 
           {zkPayload ? (
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <div className="rounded-lg border border-slate-500/35 bg-slate-900/70 px-3 py-2 text-xs text-slate-200">
-                variant <span className="font-semibold text-cyan-200">{circuitVariantLabel}</span>
+            <div className="mt-3 grid grid-cols-1 gap-px bg-slate-700/60 sm:grid-cols-3">
+              <div className="bg-slate-900/70 px-3 py-2 text-[12px] text-slate-200">
+                variant <span className="font-medium text-slate-100">{circuitVariantLabel}</span>
               </div>
-              <div className="rounded-lg border border-slate-500/35 bg-slate-900/70 px-3 py-2 text-xs text-slate-200">
-                merkle root <span className="font-semibold text-lime-200">{shortFingerprint(zkPayload.merkleRoot)}</span>
+              <div className="bg-slate-900/70 px-3 py-2 text-[12px] text-slate-200">
+                merkle root <span className="font-medium text-slate-100">{shortFingerprint(zkPayload.merkleRoot)}</span>
               </div>
-              <div className="rounded-lg border border-slate-500/35 bg-slate-900/70 px-3 py-2 text-xs text-slate-200">
-                coupling <span className="font-semibold capitalize text-amber-200">{couplingLabel}</span>
+              <div className="bg-slate-900/70 px-3 py-2 text-[12px] text-slate-200">
+                coupling <span className="font-medium capitalize text-slate-100">{couplingLabel}</span>
               </div>
             </div>
           ) : null}
@@ -332,8 +368,8 @@ export function LuminousLogicMatrix({
                       key={`${step.step}-${step.treeNodeId}`}
                       className="relative overflow-hidden rounded-lg border px-3 py-2"
                       animate={{
-                        borderColor: isActivated ? "hsl(var(--user-hue) 84% 60% / 0.62)" : "rgba(100, 116, 139, 0.3)",
-                        backgroundColor: isActivated ? "hsl(var(--user-hue) 58% 22% / 0.58)" : "rgba(15, 23, 42, 0.72)",
+                        borderColor: isActivated ? "rgba(34, 211, 238, 0.62)" : "rgba(100, 116, 139, 0.3)",
+                        backgroundColor: isActivated ? "rgba(9, 67, 82, 0.58)" : "rgba(15, 23, 42, 0.72)",
                       }}
                       transition={{ duration: shouldReduceMotion ? 0 : 0.32 }}
                     >
@@ -367,7 +403,7 @@ export function LuminousLogicMatrix({
               type="button"
               onClick={onReplayTransfer}
               disabled={!transferEnabled}
-              className="mt-3 w-full rounded-lg border border-cyan-300/30 bg-cyan-500/10 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-3 w-full border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               aria-label="Replay tree to engine transfer"
             >
               {transferEnabled ? "tree to engine transfer" : "processing"}
@@ -375,14 +411,14 @@ export function LuminousLogicMatrix({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-500/35 bg-slate-950/80 p-4">
+        <section className="bg-slate-950/85 px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs uppercase tracking-[0.2em] text-lime-300">Zero-Knowledge Proof Generator</p>
-            <span className="ml-auto rounded-md border border-cyan-300/30 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-200">
+            <p className={`text-[11px] font-medium uppercase tracking-[0.16em] ${secondaryTone}`}>Proof Generator</p>
+            <span className="ml-auto border border-slate-700/70 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-200">
               phase: {proverPhase}
             </span>
           </div>
-          <p className="mt-2 text-xs text-slate-300">
+          <p className={`mt-2 text-[12px] ${secondaryTone}`}>
             Creates a cryptographic receipt proving this user is included in the exchange total without exposing private balances.
           </p>
 
@@ -495,23 +531,23 @@ export function LuminousLogicMatrix({
             </div>
           </div>
 
-          <p className="mt-3 text-[11px] text-slate-300">Sealed Evidence Fragments move through the proving engine and combine into one final receipt.</p>
+          <p className={`mt-3 text-[11px] ${secondaryTone}`}>Sealed fragments move through the proving engine and combine into one receipt.</p>
 
           <div className="mt-3 space-y-2">
             {stageCards.map((stage) => (
-              <article key={stage.id} className={`rounded-xl border px-3 py-2 ${stage.status === "active" ? "border-lime-300/50 bg-lime-500/10" : "border-slate-500/35 bg-slate-900/70"}`}>
+              <article key={stage.id} className={`border px-3 py-2 ${stage.status === "active" ? "border-[var(--color-text-success,#86efac)]/45 bg-slate-900/75" : "border-slate-700/70 bg-slate-900/70"}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">{stage.id}</p>
-                  <p className="text-xs text-lime-200">{stage.progress ?? 0}%</p>
+                  <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>{stage.id}</p>
+                  <p className={`text-[12px] ${successTone}`}>{stage.progress ?? 0}%</p>
                 </div>
-                <p className="mt-1 text-sm font-semibold text-slate-100">{stage.label}</p>
-                <p className="mt-1 text-xs text-slate-300">{stage.detail}</p>
+                <p className="mt-1 text-[12px] font-medium text-slate-100">{stage.label}</p>
+                <p className={`mt-1 text-[11px] ${secondaryTone}`}>{stage.detail}</p>
               </article>
             ))}
           </div>
 
           {zkPayload ? (
-            <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+            <div className={`mt-3 border border-slate-700/70 bg-slate-900/75 px-3 py-2 text-[12px] ${zkPayload.couplingStatus === "linked" ? successTone : dangerTone}`}>
               {zkPayload.couplingStatus === "linked"
                 ? "Merkle root is bound into the solvency proof and verified with the selected circuit key."
                 : "The proof envelope is missing a merkle-root link or it does not match the circuit signal."}
@@ -519,9 +555,9 @@ export function LuminousLogicMatrix({
           ) : null}
         </section>
 
-        <section className="rounded-2xl border border-slate-500/35 bg-slate-950/80 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">The zk-SNARK Receipt</p>
-          <p className="mt-1 text-[11px] text-slate-300">A tiny, instantly verifiable file that proves solvency without revealing balances.</p>
+        <section className="bg-slate-950/85 px-4 py-4">
+          <p className={`text-[11px] font-medium uppercase tracking-[0.16em] ${secondaryTone}`}>The zk-SNARK Receipt</p>
+          <p className={`mt-1 text-[12px] ${secondaryTone}`}>A tiny verifiable file that proves solvency without revealing balances.</p>
 
           <div className="relative mt-3 min-h-47 overflow-hidden rounded-xl border border-slate-500/35 bg-slate-900/70 p-4">
             <AnimatePresence>
@@ -563,16 +599,16 @@ export function LuminousLogicMatrix({
               />
             </motion.div>
 
-            <p className="mt-3 text-xs uppercase tracking-[0.14em] text-slate-400">proof artifact</p>
-            <p className="text-sm text-slate-200">{zkVerificationResult}</p>
-            <p className="mt-2 text-xs text-slate-400">{shortFingerprint(zkPayload?.fingerprint)}</p>
+            <p className={`mt-3 text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>proof artifact</p>
+            <p className={`text-[12px] ${verifierPhase === "failed" ? dangerTone : successTone}`}>{zkVerificationResult}</p>
+            <p className={`mt-2 text-[11px] ${secondaryTone}`}>{shortFingerprint(zkPayload?.fingerprint)}</p>
           </div>
 
           <div className="mt-3 space-y-2">
             {metrics.slice(0, 3).map((metric) => (
-              <div key={metric.label} className="rounded-lg border border-slate-500/30 bg-slate-900/70 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">{metric.label}</p>
-                <p className="mt-1 text-sm font-semibold text-lime-200">{metric.value}</p>
+              <div key={metric.label} className="border border-slate-700/70 bg-slate-900/70 px-3 py-2">
+                <p className={`text-[11px] font-medium uppercase tracking-[0.12em] ${secondaryTone}`}>{metric.label}</p>
+                <p className={`mt-1 text-[12px] font-medium ${successTone}`}>{metric.value}</p>
               </div>
             ))}
           </div>
@@ -580,39 +616,39 @@ export function LuminousLogicMatrix({
           <button
             type="button"
             onClick={() => setShowAdvancedDetails((current) => !current)}
-            className="mt-3 w-full rounded-lg border border-slate-500/35 bg-slate-900/70 px-3 py-2 text-left text-xs text-slate-200 transition hover:bg-slate-800/80"
+            className="mt-3 w-full border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-left text-[11px] font-medium text-slate-200 transition hover:bg-slate-800"
           >
             {showAdvancedDetails ? "Hide Advanced Technical Details" : "Show Advanced Technical Details"}
           </button>
 
           {showAdvancedDetails ? (
-            <div className="mt-2 rounded-lg border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
+            <div className="mt-2 border border-slate-700/70 bg-slate-900/75 px-3 py-2 text-[12px] text-slate-200">
               <p>
-                Protocol: <span className="font-semibold text-lime-300">{zkPayload?.protocol ?? "-"}</span>
+                Protocol: <span className={`font-medium ${successTone}`}>{zkPayload?.protocol ?? "-"}</span>
               </p>
               <p className="mt-1">
-                Curve: <span className="font-semibold text-cyan-200">{zkPayload?.curve ?? "-"}</span>
+                Curve: <span className="font-medium text-slate-100">{zkPayload?.curve ?? "-"}</span>
               </p>
               <p className="mt-1">
-                Sealed Evidence Fragments: <span className="font-semibold text-amber-300">A/B/C commitments</span>
+                Sealed Evidence Fragments: <span className="font-medium text-slate-100">A/B/C commitments</span>
               </p>
             </div>
           ) : null}
         </section>
       </div>
 
-      <div className="space-y-4">
-        <section className="rounded-2xl border border-slate-500/30 bg-slate-950/70 p-4">
+      <div className="divide-y divide-slate-700/60">
+        <section className="px-4 py-4">
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Analysis & Experiment Panel</p>
+            <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>Analysis & Experiment Panel</p>
             <select
               value={selectedPanel}
               onChange={(event) => setSelectedPanel(event.target.value as "telemetry" | "verifier" | "attacker")}
-              className="rounded-lg border border-slate-500/50 bg-slate-900/80 px-3 py-2 text-xs text-slate-200 transition hover:border-slate-400/50"
+              className="border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-200 transition hover:border-slate-500/70"
             >
               <option value="telemetry">📊 Proof Telemetry</option>
               <option value="verifier">✓ Verifier Playground</option>
-              <option value="attacker">⚠️ Attacker's Area</option>
+              <option value="attacker">⚠️ Attacker&apos;s Area</option>
             </select>
           </div>
 
@@ -625,22 +661,22 @@ export function LuminousLogicMatrix({
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
               >
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 grid gap-px bg-slate-700/60 md:grid-cols-2 xl:grid-cols-1">
                   {metrics.map((metric) => (
-                    <div key={metric.label} className="rounded-lg border border-slate-500/30 bg-slate-900/70 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">{metric.label}</p>
-                      <p className="mt-1 text-sm font-semibold text-lime-200">{metric.value}</p>
-                      <p className="text-xs text-slate-400">{metric.hint}</p>
+                    <div key={metric.label} className="bg-slate-900/70 px-3 py-2">
+                      <p className={`text-[11px] font-medium uppercase tracking-[0.12em] ${secondaryTone}`}>{metric.label}</p>
+                      <p className={`mt-1 text-[12px] font-medium ${successTone}`}>{metric.value}</p>
+                      <p className={`text-[11px] ${secondaryTone}`}>{metric.hint}</p>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-3 rounded-lg border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
+                <div className="mt-3 border border-slate-700/70 bg-slate-900/75 px-3 py-2 text-[12px] text-slate-200">
                   <p>
-                    Public reserves: <span className="font-semibold text-amber-300">{zkPayload?.metadata.reserves ?? "-"}</span>
+                    Public reserves: <span className={`font-medium ${successTone}`}>{zkPayload?.metadata.reserves ?? "-"}</span>
                   </p>
                   <p className="mt-1">
-                    Circuit occupancy: <span className="font-semibold text-cyan-200">{zkPayload?.metadata.usersProvided ?? 0}</span>
+                    Circuit occupancy: <span className="font-medium text-slate-100">{zkPayload?.metadata.usersProvided ?? 0}</span>
                     /{zkPayload?.metadata.maxUsers ?? 0}
                   </p>
                 </div>
@@ -655,7 +691,7 @@ export function LuminousLogicMatrix({
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
               >
-                <p className="mt-3 text-xs text-slate-300">Verify the proof against the public merkle root, address and proof receipt.</p>
+                <p className={`mt-3 text-[12px] ${secondaryTone}`}>Verify the proof against the public merkle root, address and proof receipt.</p>
                 <div className="mt-3 grid gap-3">
                   <input
                     value={verifyRoot}
@@ -677,18 +713,18 @@ export function LuminousLogicMatrix({
                   />
                 </div>
                 <div className="mt-3 grid gap-2">
-                  <button type="button" onClick={onVerifyProof} className="ledger-button w-full">
+                  <button type="button" onClick={onVerifyProof} className="w-full border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-100 transition hover:bg-slate-800">
                     Verify zk-SNARK Receipt
                   </button>
-                  <div className="rounded-lg border border-slate-500/30 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
-                    Status: <span className={isProofTampered ? "font-semibold text-rose-200" : "font-semibold text-lime-200"}>{isProofTampered ? "tampered" : "intact"}</span>
+                  <div className="border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-[12px] text-slate-300">
+                    Status: <span className={isProofTampered ? `font-medium ${dangerTone}` : `font-medium ${successTone}`}>{isProofTampered ? "tampered" : "intact"}</span>
                   </div>
                 </div>
                 {peekMessage ? (
-                  <p className="mt-3 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">{peekMessage}</p>
+                  <p className="mt-3 border border-slate-700/70 bg-slate-900/75 px-3 py-2 text-[12px] text-slate-200">{peekMessage}</p>
                 ) : null}
-                <p className="mt-3 text-sm text-slate-200">
-                  Result: <span className="font-semibold text-lime-300">{zkVerificationResult}</span>
+                <p className="mt-3 text-[12px] text-slate-200">
+                  Result: <span className={`font-medium ${verifierPhase === "failed" ? dangerTone : successTone}`}>{zkVerificationResult}</span>
                 </p>
               </motion.div>
             )}
@@ -701,63 +737,63 @@ export function LuminousLogicMatrix({
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
               >
-                <p className="mt-3 text-xs text-slate-300">Experiment with sabotage attacks. The cryptography blocks all three.</p>
+                <p className={`mt-3 text-[12px] ${secondaryTone}`}>Experiment with sabotage attacks. The cryptography blocks all three.</p>
                 <div className="mt-4 space-y-3">
-                  <div className="rounded-lg border border-rose-400/40 bg-rose-950/30 p-3">
-                    <p className="text-xs font-semibold text-rose-300">Sabotage 1: Break Range Check</p>
-                    <p className="mt-1 text-[11px] text-slate-300">Try to create a proof with a negative balance (-500). The circuit has a cryptographic range proof that blocks it.</p>
-                    <label className="mt-2 block text-[10px] uppercase tracking-[0.1em] text-rose-200/90">Injected balance value</label>
+                  <div className="border border-slate-700/70 bg-slate-900/75 p-3">
+                    <p className={`text-[11px] font-medium ${dangerTone}`}>Sabotage 1: Break Range Check</p>
+                    <p className={`mt-1 text-[11px] ${secondaryTone}`}>Try to create a proof with a negative balance (-500). The circuit has a cryptographic range proof that blocks it.</p>
+                    <label className={`mt-2 block text-[11px] uppercase tracking-[0.1em] ${secondaryTone}`}>Injected balance value</label>
                     <input
                       value={rangeAttackBalance}
                       onChange={(event) => setRangeAttackBalance(event.target.value)}
                       placeholder="-500"
-                      className="mt-1 w-full rounded-md border border-rose-300/45 bg-slate-900/80 px-2 py-1 text-xs text-rose-100"
+                      className="mt-1 w-full border border-slate-700/70 bg-slate-950/90 px-2 py-1 text-[12px] text-slate-100"
                     />
                     <button
                       type="button"
                       onClick={() => onSabotageRangeCheck(Number(rangeAttackBalance))}
                       disabled={zkLoading}
-                      className="mt-2 w-full rounded-lg border border-rose-300/50 bg-rose-500/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-rose-100 transition hover:bg-rose-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                      className={`mt-2 w-full border border-slate-700/70 bg-slate-950/90 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.1em] ${dangerTone} transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       Attempt: Negative Balance
                     </button>
                   </div>
 
-                  <div className="rounded-lg border border-orange-400/40 bg-orange-950/30 p-3">
-                    <p className="text-xs font-semibold text-orange-300">Sabotage 2: Break Solvency Check</p>
-                    <p className="mt-1 text-[11px] text-slate-300">Try to prove solvency when total liabilities exceed reserves by overriding the public <span className="font-semibold text-orange-200">reserves</span> request parameter.</p>
-                    <label className="mt-2 block text-[10px] uppercase tracking-[0.1em] text-orange-200/90">Forced reserves parameter</label>
+                  <div className="border border-slate-700/70 bg-slate-900/75 p-3">
+                    <p className={`text-[11px] font-medium ${dangerTone}`}>Sabotage 2: Break Solvency Check</p>
+                    <p className={`mt-1 text-[11px] ${secondaryTone}`}>Try to prove solvency when total liabilities exceed reserves by overriding the public reserves request parameter.</p>
+                    <label className={`mt-2 block text-[11px] uppercase tracking-[0.1em] ${secondaryTone}`}>Forced reserves parameter</label>
                     <input
                       value={insolvencyReserves}
                       onChange={(event) => setInsolvencyReserves(event.target.value)}
                       placeholder="0"
-                      className="mt-1 w-full rounded-md border border-orange-300/45 bg-slate-900/80 px-2 py-1 text-xs text-orange-100"
+                      className="mt-1 w-full border border-slate-700/70 bg-slate-950/90 px-2 py-1 text-[12px] text-slate-100"
                     />
                     <button
                       type="button"
                       onClick={() => onSabotageInsolvency(Number(insolvencyReserves))}
                       disabled={zkLoading}
-                      className="mt-2 w-full rounded-lg border border-orange-300/50 bg-orange-500/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-orange-100 transition hover:bg-orange-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                      className={`mt-2 w-full border border-slate-700/70 bg-slate-950/90 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.1em] ${dangerTone} transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       Attempt: Liabilities &gt; Reserves
                     </button>
                   </div>
 
-                  <div className="rounded-lg border border-amber-400/40 bg-amber-950/30 p-3">
-                    <p className="text-xs font-semibold text-amber-300">Sabotage 3: Tamper with Cryptographic Proof</p>
-                    <p className="mt-1 text-[11px] text-slate-300">Mutate one nibble inside a proof hash value. Verification fails instantly at the pairing check.</p>
+                  <div className="border border-slate-700/70 bg-slate-900/75 p-3">
+                    <p className={`text-[11px] font-medium ${dangerTone}`}>Sabotage 3: Tamper with Cryptographic Proof</p>
+                    <p className={`mt-1 text-[11px] ${secondaryTone}`}>Mutate one nibble inside a proof hash value. Verification fails instantly at the pairing check.</p>
                     <button
                       type="button"
                       onClick={onSabotageMutateProof}
                       disabled={!zkPayload}
-                      className="mt-2 w-full rounded-lg border border-amber-300/50 bg-amber-500/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-amber-100 transition hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                      className={`mt-2 w-full border border-slate-700/70 bg-slate-950/90 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.1em] ${dangerTone} transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       Mutate Proof Character
                     </button>
                   </div>
 
                   {sabotageMessage ? (
-                    <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{sabotageMessage}</p>
+                    <p className={`border border-slate-700/70 bg-slate-900/75 px-3 py-2 text-[12px] ${dangerTone}`}>{sabotageMessage}</p>
                   ) : null}
                 </div>
               </motion.div>
@@ -765,10 +801,10 @@ export function LuminousLogicMatrix({
           </AnimatePresence>
         </section>
 
-        <section className="rounded-2xl border border-slate-500/30 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Verifier Terminal</p>
+        <section className="px-4 py-4">
+          <p className={`text-[11px] font-medium uppercase tracking-[0.14em] ${secondaryTone}`}>Verifier Terminal</p>
           <div className={`mt-3 rounded-xl border p-3 ${verifierToneClass}`}>
-            <div className="max-h-52 overflow-auto font-mono text-[11px] leading-5 text-lime-200">
+            <div className={`max-h-52 overflow-auto font-mono text-[11px] leading-5 ${verifierPhase === "failed" ? dangerTone : successTone}`}>
               <AnimatePresence initial={false}>
                 {verifierTerminalLines.map((line, index) => (
                   <motion.p

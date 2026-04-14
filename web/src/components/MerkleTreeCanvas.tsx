@@ -59,18 +59,6 @@ type BeamSegment = {
   angleDeg: number;
 };
 
-function derivePhaseForMode(nextMode: "cinematic" | "timeline", maxBuildLevel: number): BuildPhase {
-  if (nextMode === "cinematic") {
-    return "input-stream";
-  }
-
-  if (maxBuildLevel === 0) {
-    return "complete";
-  }
-
-  return "tree-building";
-}
-
 function shortHash(hash: string) {
   return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
 }
@@ -217,7 +205,6 @@ export function MerkleTreeCanvas({
   const [buildLevel, setBuildLevel] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1.2);
-  const [mode, setMode] = useState<"cinematic" | "timeline">("cinematic");
   const [buildPhase, setBuildPhase] = useState<BuildPhase>("input-stream");
   const [mergeTick, setMergeTick] = useState(0);
   const [pathRevealIndex, setPathRevealIndex] = useState(-1);
@@ -236,7 +223,7 @@ export function MerkleTreeCanvas({
   const isAnimating = buildPhase === "tree-building" && isPlaying && buildLevel < maxBuildLevel;
 
   useEffect(() => {
-    if (mode !== "cinematic" || buildPhase !== "input-stream") {
+    if (buildPhase !== "input-stream") {
       return;
     }
 
@@ -266,7 +253,7 @@ export function MerkleTreeCanvas({
     return () => {
       timers.forEach((timer) => globalThis.clearTimeout(timer));
     };
-  }, [mode, buildPhase, snapshot]);
+  }, [snapshot.root.hash, snapshot.levels.length]);
 
   useEffect(() => {
     if (!isAnimating) {
@@ -687,7 +674,7 @@ export function MerkleTreeCanvas({
   const stepLabel = `Stage ${buildLevel + 1} / ${maxBuildLevel + 1}`;
 
   function handlePlayPause() {
-    if (buildPhase === "input-stream") {
+    if (buildPhase === "input-stream" || buildPhase === "leaf-building") {
       setPathRevealIndex(-1);
       if (maxBuildLevel === 0) {
         setBuildLevel(0);
@@ -838,26 +825,6 @@ export function MerkleTreeCanvas({
             {buildPhase}
           </span>
 
-          <label className="ml-auto flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-slate-300">
-            <span>Playback</span>
-            <select
-              value={mode}
-              onChange={(event) => {
-                const nextMode = event.target.value as "cinematic" | "timeline";
-                const nextPhase = derivePhaseForMode(nextMode, maxBuildLevel);
-                setMode(nextMode);
-                setPathRevealIndex(-1);
-                setBuildLevel(0);
-                setMergeTick((tick) => tick + 1);
-                setBuildPhase(nextPhase);
-                setIsPlaying(false);
-              }}
-              className="rounded-md border border-slate-500/40 bg-slate-900 px-2 py-1 text-xs text-slate-100 outline-none"
-            >
-              <option value="cinematic">Cinematic</option>
-              <option value="timeline">Timeline</option>
-            </select>
-          </label>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3">

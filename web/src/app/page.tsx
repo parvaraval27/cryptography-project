@@ -18,6 +18,7 @@ import { deriveUserVisualProfile } from "../lib/visualProfile";
 type ProverPhase = "idle" | "inflow" | "proving" | "emission" | "settled";
 type VerifierPhase = "pending" | "checking" | "passed" | "failed";
 type TreeVisualMode = "classic" | "phantom";
+type WorkflowStageState = "done" | "active" | "upcoming";
 
 const MAX_USERS = 256;
 const INFLOW_DURATION_MS = 1500;
@@ -151,6 +152,18 @@ function queueVerifierTerminalLines(
       setVerifierTerminalLines((current) => [...current, terminalLine]);
     }, delayMs);
   }
+}
+
+function resolveWorkflowStageState(currentIndex: number, stageIndex: number): WorkflowStageState {
+  if (stageIndex < currentIndex) {
+    return "done";
+  }
+
+  if (stageIndex === currentIndex) {
+    return "active";
+  }
+
+  return "upcoming";
 }
 
 export default function Home() {
@@ -660,21 +673,74 @@ export default function Home() {
   const transferEnabled = merkleCompleted && zkPayload !== null && !loadingSnapshot && proverPhase === "settled";
   const focusedRow = rows.find((row) => row.accountId.trim() === selectedUserId.trim());
   const focusedBalance = focusedRow ? String(focusedRow.balance) : "-";
+  const workflowIndex = loadingSnapshot ? 1 : !payload ? 0 : !merkleCompleted ? 1 : !zkPayload ? 2 : 3;
+  const workflowStages = useMemo(
+    () => [
+      {
+        id: "input",
+        label: "01",
+        title: "Enter balances",
+        description: "Prepare the exchange accounts and choose the focus account for the snapshot.",
+        href: "#step-input",
+      },
+      {
+        id: "tree",
+        label: "02",
+        title: "Build Merkle tree",
+        description: "Generate the snapshot and watch the inclusion path form.",
+        href: "#step-tree",
+      },
+      {
+        id: "proof",
+        label: "03",
+        title: "Generate zk proof",
+        description: "Bind the public Merkle root and solvency status into one proof flow.",
+        href: "#step-proof",
+      },
+      {
+        id: "verify",
+        label: "04",
+        title: "Verify and inspect",
+        description: "Check the proof, inspect the transcript, and review the tamper tests.",
+        href: "#step-proof",
+      },
+    ],
+    [],
+  );
+  
 
   return (
     <main className="mx-auto flex w-full max-w-350 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
       <header className="step-shell border-lime-400/30">
-        <p className="text-xs uppercase tracking-[0.32em] text-lime-300/90">Proof of Solvency Experience</p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-50 sm:text-4xl">Stepwise Merkle-to-ZK Flow</h1>
-        <p className="mt-3 max-w-3xl text-sm text-slate-300">
-          Build your Merkle dataset, watch the full tree construct in neon-green, then unlock a readable zk-SNARK proving sequence with a clear proof envelope.
-        </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.32em] text-lime-300/90">Cryptography Project</p>
+            <h1 className="mt-2 text-3xl font-semibold text-slate-50 sm:text-4xl">Proof of Reserve System</h1>
+            
+          </div>
+
+          
+        </div>
+
+        <div className="mt-5 workflow-rail">
+          {workflowStages.map((stage, index) => {
+            const stageState = resolveWorkflowStageState(workflowIndex, index);
+            return (
+              <a key={stage.id} href={stage.href} className={`workflow-card workflow-card-${stageState}`}>
+                <span className="workflow-card-index">{stage.label}</span>
+                <span className="workflow-card-title">{stage.title}</span>
+                <span className="workflow-card-copy">{stage.description}</span>
+              </a>
+            );
+          })}
+        </div>
       </header>
 
-      <section className="step-shell border-lime-400/30">
+      <section id="step-input" className="step-shell border-lime-400/30 scroll-mt-6">
         <div className="step-heading">
           <span className="step-index">STEP 1</span>
           <h2 className="step-title">Input Merkle Data</h2>
+          <p className="ml-auto text-xs text-slate-400">Start here and keep the flow linear.</p>
         </div>
 
         <UserInputTable
@@ -692,10 +758,11 @@ export default function Home() {
         />
       </section>
 
-      <section className="step-shell border-lime-400/30">
+      <section id="step-tree" className="step-shell border-lime-400/30 scroll-mt-6">
         <div className="step-heading">
           <span className="step-index">STEP 2</span>
           <h2 className="step-title">Merkle Tree Construction</h2>
+          <p className="ml-auto text-xs text-slate-400">The tree snapshot becomes the input for the proof stage.</p>
           <label className="ml-auto flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-slate-300">
             <span>View</span>
             <select
@@ -727,10 +794,11 @@ export default function Home() {
         )}
       </section>
 
-      <section className="step-shell border-lime-400/30">
+      <section id="step-proof" className="step-shell border-lime-400/30 scroll-mt-6">
         <div className="step-heading">
           <span className="step-index">STEP 3</span>
           <h2 className="step-title">zk-SNARK Proof Stream</h2>
+          <p className="ml-auto text-xs text-slate-400">Proof generation, verification, and inspection happen here.</p>
         </div>
 
         {merkleCompleted ? (
