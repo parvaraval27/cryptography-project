@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useMemo, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import type {
   MerkleSnapshotPayload,
   ProofTracePayload,
@@ -33,6 +33,13 @@ type LuminousLogicMatrixProps = {
   onVerifyProofInputChange: (value: string) => void;
   onVerifyProof: () => void;
   onReplayTransfer: () => void;
+  onSabotageRangeCheck: (balanceToInject: number) => void;
+  onSabotageInsolvency: (forcedReserves: number) => void;
+  onSabotageMutateProof: () => void;
+  isProofTampered: boolean;
+  peekMessage: string | null;
+  sabotageMessage: string | null;
+  focusBalance: string;
   transferEnabled: boolean;
   visualProfile: UserVisualProfile;
 };
@@ -67,6 +74,12 @@ function resolvePiSuffix(key: string, index: number) {
   }
   return `${index + 1}`;
 }
+
+const PROVING_CHECKS = [
+  "Checking: Is balance > 0? ... YES",
+  "Checking: Does user path match Merkle root? ... YES",
+  "Checking: Are total liabilities <= total reserves? ... YES",
+] as const;
 
 function resolveCrystalShadow(verifierPhase: VerifierPhase) {
   if (verifierPhase === "passed") {
@@ -186,9 +199,20 @@ export function LuminousLogicMatrix({
   onVerifyProofInputChange,
   onVerifyProof,
   onReplayTransfer,
+  onSabotageRangeCheck,
+  onSabotageInsolvency,
+  onSabotageMutateProof,
+  isProofTampered,
+  peekMessage,
+  sabotageMessage,
+  focusBalance,
   transferEnabled,
   visualProfile,
 }: Readonly<LuminousLogicMatrixProps>) {
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
+  const [selectedPanel, setSelectedPanel] = useState<"telemetry" | "verifier" | "attacker">("verifier");
+  const [rangeAttackBalance, setRangeAttackBalance] = useState("-500");
+  const [insolvencyReserves, setInsolvencyReserves] = useState("0");
   const shouldReduceMotion = useReducedMotion();
   const pathSteps = snapshot?.proofPhantomPath?.stepSequence ?? [];
   const activePathIndex = useMemo(() => resolveActivePathIndex(proverPhase, pathSteps.length), [proverPhase, pathSteps.length]);
@@ -199,6 +223,8 @@ export function LuminousLogicMatrix({
   const rootHash = snapshot?.root.hash ?? verifyRoot;
   const focusUser = proof?.userId ?? (verifyAddress || "-");
   const ringState = resolveRingState(proverPhase);
+  const circuitVariantLabel = zkPayload?.circuitVariant ? `N=${zkPayload.circuitVariant}` : "unknown";
+  const couplingLabel = zkPayload?.couplingStatus ?? "missing";
 
   let verifierToneClass = "border-slate-600/40 bg-slate-900/70";
   if (verifierPhase === "passed") {
@@ -219,14 +245,75 @@ export function LuminousLogicMatrix({
 
       {zkLoading ? <p className="text-sm text-slate-300">Synchronizing cryptographic circuit state...</p> : null}
 
+      <section className="rounded-2xl border border-cyan-400/30 bg-cyan-950/35 p-4">
+        <p className="text-xs uppercase tracking-[0.14em] text-cyan-300">Explain It To Me</p>
+        <h3 className="mt-1 text-lg font-semibold text-cyan-100">What is happening here?</h3>
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-200">
+          <li>
+            The system takes your <span className="font-semibold text-cyan-200">Private Balance</span> and the
+            <span className="font-semibold text-amber-200"> Public Exchange Total</span>.
+          </li>
+          <li>
+            It runs complex math to create a <span className="font-semibold text-lime-200">zk-SNARK receipt</span>, a tiny mathematical proof.
+          </li>
+          <li>
+            Anyone can verify this receipt and know your funds are included and solvent,
+            <span className="font-semibold text-cyan-200"> without seeing your balance</span>.
+          </li>
+        </ol>
+      </section>
+
       <div className="grid gap-4 xl:grid-cols-[0.92fr_1.2fr_0.95fr]">
         <section className="rounded-2xl border border-slate-500/35 bg-slate-950/80 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">Fiber-Optic Phantom Feed</p>
+            <p className="text-[11px] text-slate-400">Private inputs flow in. Public proof comes out.</p>
             <span className="ml-auto rounded-md border border-amber-300/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-100">
               root: {shortFingerprint(rootHash)}
             </span>
           </div>
+
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <article className="rounded-xl border border-cyan-400/35 bg-cyan-950/35 p-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-300">Hidden Inputs (Private)</p>
+              <div className="mt-2 rounded-lg border border-cyan-400/30 bg-slate-900/80 px-3 py-2">
+                <p className="text-xs text-slate-300">Account ID</p>
+                <p className="mt-1 font-mono text-sm text-cyan-100 blur-[1px]">{focusUser}</p>
+              </div>
+              <div className="mt-2 rounded-lg border border-cyan-400/30 bg-slate-900/80 px-3 py-2">
+                <p className="text-xs text-slate-300">Exact Balance</p>
+                <p className="mt-1 font-mono text-sm text-cyan-100 blur-[1px]">{focusBalance}</p>
+              </div>
+              <p className="mt-2 text-[11px] text-cyan-200/85">Locked in a digital envelope before proving.</p>
+            </article>
+
+            <article className="rounded-xl border border-lime-400/35 bg-lime-950/25 p-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-lime-300">Public Inputs (Transparent)</p>
+              <div className="mt-2 rounded-lg border border-lime-400/30 bg-slate-900/80 px-3 py-2">
+                <p className="text-xs text-slate-300">Merkle Root</p>
+                <p className="mt-1 font-mono text-sm text-lime-100">{shortFingerprint(rootHash)}</p>
+              </div>
+              <div className="mt-2 rounded-lg border border-lime-400/30 bg-slate-900/80 px-3 py-2">
+                <p className="text-xs text-slate-300">Total Exchange Reserves</p>
+                <p className="mt-1 text-sm font-semibold text-amber-200">{zkPayload?.metadata.reserves ?? "-"}</p>
+              </div>
+              <p className="mt-2 text-[11px] text-lime-200/90">Visible to everyone and used for instant checks.</p>
+            </article>
+          </div>
+
+          {zkPayload ? (
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-slate-500/35 bg-slate-900/70 px-3 py-2 text-xs text-slate-200">
+                variant <span className="font-semibold text-cyan-200">{circuitVariantLabel}</span>
+              </div>
+              <div className="rounded-lg border border-slate-500/35 bg-slate-900/70 px-3 py-2 text-xs text-slate-200">
+                merkle root <span className="font-semibold text-lime-200">{shortFingerprint(zkPayload.merkleRoot)}</span>
+              </div>
+              <div className="rounded-lg border border-slate-500/35 bg-slate-900/70 px-3 py-2 text-xs text-slate-200">
+                coupling <span className="font-semibold capitalize text-amber-200">{couplingLabel}</span>
+              </div>
+            </div>
+          ) : null}
 
           <div className="phantom-intake-shell mt-3">
             <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Focused Inclusion Path</p>
@@ -258,39 +345,13 @@ export function LuminousLogicMatrix({
                         {isCurrentFlow ? (
                           <motion.div
                             key={`merge-${step.step}`}
-                            className="pointer-events-none relative mt-2 h-5"
+                            className="mt-2 rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2 py-1"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.2 }}
                           >
-                            <motion.span
-                              className="absolute left-0 top-2 h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.75)]"
-                              animate={
-                                shouldReduceMotion
-                                  ? { opacity: 1 }
-                                  : { x: [0, 20, 32], opacity: [0, 1, 1, 0], scale: [0.8, 1, 0.7] }
-                              }
-                              transition={{ duration: 0.85, repeat: shouldReduceMotion ? 0 : Infinity, repeatDelay: 0.25 }}
-                            />
-                            <motion.span
-                              className="absolute right-0 top-2 h-2 w-2 rounded-full bg-lime-300 shadow-[0_0_12px_rgba(132,204,22,0.8)]"
-                              animate={
-                                shouldReduceMotion
-                                  ? { opacity: 1 }
-                                  : { x: [0, -20, -32], opacity: [0, 1, 1, 0], scale: [0.8, 1, 0.7] }
-                              }
-                              transition={{ duration: 0.85, repeat: shouldReduceMotion ? 0 : Infinity, repeatDelay: 0.25 }}
-                            />
-                            <motion.span
-                              className="absolute left-1/2 top-1.5 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-emerald-200 shadow-[0_0_14px_rgba(110,231,183,0.9)]"
-                              animate={
-                                shouldReduceMotion
-                                  ? { opacity: 1 }
-                                  : { y: [6, 0, -8], opacity: [0, 1, 1, 0], scale: [0.5, 1.05, 0.85] }
-                              }
-                              transition={{ duration: 0.85, repeat: shouldReduceMotion ? 0 : Infinity, repeatDelay: 0.25 }}
-                            />
+                            <p className="text-[11px] uppercase tracking-[0.1em] text-cyan-200">active merge: sibling hashes combined</p>
                           </motion.div>
                         ) : null}
                       </AnimatePresence>
@@ -300,40 +361,6 @@ export function LuminousLogicMatrix({
               ) : (
                 <p className="text-xs text-slate-400">Path mapping will appear after snapshot metadata is ready.</p>
               )}
-            </div>
-
-            <div className="relative mt-4 h-12 overflow-hidden rounded-lg border border-cyan-400/25 bg-slate-900/75">
-              <svg className="absolute inset-0 h-full w-full" viewBox="0 0 300 56" preserveAspectRatio="none">
-                <path
-                  d="M10 38 C 75 36, 110 12, 175 18 S 260 30, 292 26"
-                  fill="none"
-                  stroke="rgba(56,189,248,0.55)"
-                  strokeWidth="2"
-                />
-              </svg>
-              {(proverPhase === "inflow" || proverPhase === "proving" || proverPhase === "emission") &&
-                [0, 1, 2].map((particle) => (
-                  <motion.span
-                    key={`bridge-particle-${particle}`}
-                    className="absolute left-2 top-7 h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(56,189,248,0.85)]"
-                    animate={
-                      shouldReduceMotion
-                        ? { opacity: 0.9 }
-                        : {
-                            x: [0, 76, 138, 198, 250],
-                            y: [0, -12, -17, -10, -14],
-                            opacity: [0, 1, 1, 1, 0],
-                            scale: [0.7, 1, 1, 1, 0.7],
-                          }
-                    }
-                    transition={{
-                      duration: 1.25,
-                      repeat: shouldReduceMotion ? 0 : Infinity,
-                      delay: particle * 0.2,
-                      ease: "easeInOut",
-                    }}
-                  />
-                ))}
             </div>
 
             <button
@@ -350,11 +377,14 @@ export function LuminousLogicMatrix({
 
         <section className="rounded-2xl border border-slate-500/35 bg-slate-950/80 p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs uppercase tracking-[0.2em] text-lime-300">R1CS Proving Engine</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-lime-300">Zero-Knowledge Proof Generator</p>
             <span className="ml-auto rounded-md border border-cyan-300/30 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-200">
               phase: {proverPhase}
             </span>
           </div>
+          <p className="mt-2 text-xs text-slate-300">
+            Creates a cryptographic receipt proving this user is included in the exchange total without exposing private balances.
+          </p>
 
           <div className="relative mt-3 min-h-63 overflow-hidden rounded-2xl border border-slate-500/35 bg-[radial-gradient(circle_at_20%_18%,rgba(56,189,248,0.22),transparent_38%),radial-gradient(circle_at_80%_72%,rgba(132,204,22,0.16),transparent_42%),linear-gradient(140deg,rgba(2,6,23,0.94),rgba(15,23,42,0.92))]">
             {RING_BLUEPRINT.map((ring) => (
@@ -406,34 +436,25 @@ export function LuminousLogicMatrix({
               }}
               transition={{ duration: shouldReduceMotion ? 0 : 0.7, repeat: proverPhase === "proving" ? Infinity : 0 }}
             >
-              R1CS
+              {proverPhase === "inflow" ? "ENVELOPE" : proverPhase === "emission" || proverPhase === "settled" ? "STAMP" : "PROOF"}
             </motion.div>
 
             <AnimatePresence>
               {proverPhase === "proving" ? (
                 <motion.div
                   key="constraint-cue"
-                  className="absolute left-1/2 top-5 -translate-x-1/2 rounded-md border border-lime-300/40 bg-lime-500/15 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-lime-100"
+                  className="absolute left-1/2 top-5 -translate-x-1/2 rounded-md border border-lime-300/40 bg-lime-500/15 px-2 py-2 text-[10px] tracking-[0.08em] text-lime-100"
                   initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: [0.35, 1, 0.35], y: 0 }}
+                  animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: shouldReduceMotion ? 0 : 0.9, repeat: shouldReduceMotion ? 0 : Infinity }}
+                  transition={{ duration: shouldReduceMotion ? 0 : 0.25 }}
                 >
-                  A * B = C
+                  {PROVING_CHECKS.map((line) => (
+                    <p key={line} className="text-[10px] leading-4">
+                      {line}
+                    </p>
+                  ))}
                 </motion.div>
-              ) : null}
-            </AnimatePresence>
-
-            <AnimatePresence>
-              {proverPhase === "emission" ? (
-                <motion.span
-                  key="emission-burst"
-                  className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/55"
-                  initial={{ opacity: 0.85, scale: 0.45 }}
-                  animate={{ opacity: 0, scale: 2.3 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.65, ease: "easeOut" }}
-                />
               ) : null}
             </AnimatePresence>
 
@@ -464,11 +485,17 @@ export function LuminousLogicMatrix({
             </AnimatePresence>
 
             <div className="absolute bottom-3 left-3 rounded-md border border-cyan-300/25 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-100">
-              ring pulse: {Math.round(ringState.pulse * 100)}%
+              {proverPhase === "inflow"
+                ? "wrapping private data in a digital envelope"
+                : proverPhase === "proving"
+                  ? "running solvency checks"
+                  : proverPhase === "emission"
+                    ? "emitting zk-SNARK receipt"
+                    : `ring pulse: ${Math.round(ringState.pulse * 100)}%`}
             </div>
           </div>
 
-          <p className="mt-3 text-[11px] text-slate-400">UI aliases map PLONK A/B/C commitments to pi_a/pi_b/pi_c labels for readability.</p>
+          <p className="mt-3 text-[11px] text-slate-300">Sealed Evidence Fragments move through the proving engine and combine into one final receipt.</p>
 
           <div className="mt-3 space-y-2">
             {stageCards.map((stage) => (
@@ -482,10 +509,19 @@ export function LuminousLogicMatrix({
               </article>
             ))}
           </div>
+
+          {zkPayload ? (
+            <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+              {zkPayload.couplingStatus === "linked"
+                ? "Merkle root is bound into the solvency proof and verified with the selected circuit key."
+                : "The proof envelope is missing a merkle-root link or it does not match the circuit signal."}
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-2xl border border-slate-500/35 bg-slate-950/80 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Succinct Proof Output</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">The zk-SNARK Receipt</p>
+          <p className="mt-1 text-[11px] text-slate-300">A tiny, instantly verifiable file that proves solvency without revealing balances.</p>
 
           <div className="relative mt-3 min-h-47 overflow-hidden rounded-xl border border-slate-500/35 bg-slate-900/70 p-4">
             <AnimatePresence>
@@ -499,7 +535,7 @@ export function LuminousLogicMatrix({
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.55, delay: shouldReduceMotion ? 0 : index * 0.11, ease: "easeInOut" }}
                     >
-                      {packet.piLabel}
+                      sealed-{index + 1}
                     </motion.span>
                   ))
                 : null}
@@ -541,75 +577,195 @@ export function LuminousLogicMatrix({
             ))}
           </div>
 
-          <div className="mt-3 rounded-lg border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
-            <p>
-              Protocol: <span className="font-semibold text-lime-300">{zkPayload?.protocol ?? "-"}</span>
-            </p>
-            <p className="mt-1">
-              Curve: <span className="font-semibold text-cyan-200">{zkPayload?.curve ?? "-"}</span>
-            </p>
-            <p className="mt-1">
-              Reserves: <span className="font-semibold text-amber-300">{zkPayload?.metadata.reserves ?? "-"}</span>
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAdvancedDetails((current) => !current)}
+            className="mt-3 w-full rounded-lg border border-slate-500/35 bg-slate-900/70 px-3 py-2 text-left text-xs text-slate-200 transition hover:bg-slate-800/80"
+          >
+            {showAdvancedDetails ? "Hide Advanced Technical Details" : "Show Advanced Technical Details"}
+          </button>
+
+          {showAdvancedDetails ? (
+            <div className="mt-2 rounded-lg border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
+              <p>
+                Protocol: <span className="font-semibold text-lime-300">{zkPayload?.protocol ?? "-"}</span>
+              </p>
+              <p className="mt-1">
+                Curve: <span className="font-semibold text-cyan-200">{zkPayload?.curve ?? "-"}</span>
+              </p>
+              <p className="mt-1">
+                Sealed Evidence Fragments: <span className="font-semibold text-amber-300">A/B/C commitments</span>
+              </p>
+            </div>
+          ) : null}
         </section>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+      <div className="space-y-4">
         <section className="rounded-2xl border border-slate-500/30 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Proof Telemetry</p>
-          <div className="mt-3 space-y-2">
-            {metrics.map((metric) => (
-              <div key={metric.label} className="rounded-lg border border-slate-500/30 bg-slate-900/70 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">{metric.label}</p>
-                <p className="mt-1 text-sm font-semibold text-lime-200">{metric.value}</p>
-                <p className="text-xs text-slate-400">{metric.hint}</p>
-              </div>
-            ))}
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Analysis & Experiment Panel</p>
+            <select
+              value={selectedPanel}
+              onChange={(event) => setSelectedPanel(event.target.value as "telemetry" | "verifier" | "attacker")}
+              className="rounded-lg border border-slate-500/50 bg-slate-900/80 px-3 py-2 text-xs text-slate-200 transition hover:border-slate-400/50"
+            >
+              <option value="telemetry">📊 Proof Telemetry</option>
+              <option value="verifier">✓ Verifier Playground</option>
+              <option value="attacker">⚠️ Attacker's Area</option>
+            </select>
           </div>
 
-          <div className="mt-3 rounded-lg border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
-            <p>
-              Public reserves: <span className="font-semibold text-amber-300">{zkPayload?.metadata.reserves ?? "-"}</span>
-            </p>
-            <p className="mt-1">
-              Circuit occupancy: <span className="font-semibold text-cyan-200">{zkPayload?.metadata.usersProvided ?? 0}</span>
-              /{zkPayload?.metadata.maxUsers ?? 0}
-            </p>
-          </div>
+          <AnimatePresence mode="wait">
+            {selectedPanel === "telemetry" && (
+              <motion.div
+                key="telemetry"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="mt-4 space-y-2">
+                  {metrics.map((metric) => (
+                    <div key={metric.label} className="rounded-lg border border-slate-500/30 bg-slate-900/70 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">{metric.label}</p>
+                      <p className="mt-1 text-sm font-semibold text-lime-200">{metric.value}</p>
+                      <p className="text-xs text-slate-400">{metric.hint}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 rounded-lg border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs text-slate-200">
+                  <p>
+                    Public reserves: <span className="font-semibold text-amber-300">{zkPayload?.metadata.reserves ?? "-"}</span>
+                  </p>
+                  <p className="mt-1">
+                    Circuit occupancy: <span className="font-semibold text-cyan-200">{zkPayload?.metadata.usersProvided ?? 0}</span>
+                    /{zkPayload?.metadata.maxUsers ?? 0}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {selectedPanel === "verifier" && (
+              <motion.div
+                key="verifier"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <p className="mt-3 text-xs text-slate-300">Verify the proof against the public merkle root, address and proof receipt.</p>
+                <div className="mt-3 grid gap-3">
+                  <input
+                    value={verifyRoot}
+                    onChange={(event) => onVerifyRootChange(event.target.value)}
+                    placeholder="Public Merkle Root"
+                    className="ledger-input"
+                  />
+                  <input
+                    value={verifyAddress}
+                    onChange={(event) => onVerifyAddressChange(event.target.value)}
+                    placeholder="Public User ID"
+                    className="ledger-input"
+                  />
+                  <textarea
+                    value={verifyProofInput}
+                    onChange={(event) => onVerifyProofInputChange(event.target.value)}
+                    placeholder="zk-SNARK Receipt Payload"
+                    className="ledger-input min-h-24"
+                  />
+                </div>
+                <div className="mt-3 grid gap-2">
+                  <button type="button" onClick={onVerifyProof} className="ledger-button w-full">
+                    Verify zk-SNARK Receipt
+                  </button>
+                  <div className="rounded-lg border border-slate-500/30 bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+                    Status: <span className={isProofTampered ? "font-semibold text-rose-200" : "font-semibold text-lime-200"}>{isProofTampered ? "tampered" : "intact"}</span>
+                  </div>
+                </div>
+                {peekMessage ? (
+                  <p className="mt-3 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">{peekMessage}</p>
+                ) : null}
+                <p className="mt-3 text-sm text-slate-200">
+                  Result: <span className="font-semibold text-lime-300">{zkVerificationResult}</span>
+                </p>
+              </motion.div>
+            )}
+
+            {selectedPanel === "attacker" && (
+              <motion.div
+                key="attacker"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <p className="mt-3 text-xs text-slate-300">Experiment with sabotage attacks. The cryptography blocks all three.</p>
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-lg border border-rose-400/40 bg-rose-950/30 p-3">
+                    <p className="text-xs font-semibold text-rose-300">Sabotage 1: Break Range Check</p>
+                    <p className="mt-1 text-[11px] text-slate-300">Try to create a proof with a negative balance (-500). The circuit has a cryptographic range proof that blocks it.</p>
+                    <label className="mt-2 block text-[10px] uppercase tracking-[0.1em] text-rose-200/90">Injected balance value</label>
+                    <input
+                      value={rangeAttackBalance}
+                      onChange={(event) => setRangeAttackBalance(event.target.value)}
+                      placeholder="-500"
+                      className="mt-1 w-full rounded-md border border-rose-300/45 bg-slate-900/80 px-2 py-1 text-xs text-rose-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onSabotageRangeCheck(Number(rangeAttackBalance))}
+                      disabled={zkLoading}
+                      className="mt-2 w-full rounded-lg border border-rose-300/50 bg-rose-500/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-rose-100 transition hover:bg-rose-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Attempt: Negative Balance
+                    </button>
+                  </div>
+
+                  <div className="rounded-lg border border-orange-400/40 bg-orange-950/30 p-3">
+                    <p className="text-xs font-semibold text-orange-300">Sabotage 2: Break Solvency Check</p>
+                    <p className="mt-1 text-[11px] text-slate-300">Try to prove solvency when total liabilities exceed reserves by overriding the public <span className="font-semibold text-orange-200">reserves</span> request parameter.</p>
+                    <label className="mt-2 block text-[10px] uppercase tracking-[0.1em] text-orange-200/90">Forced reserves parameter</label>
+                    <input
+                      value={insolvencyReserves}
+                      onChange={(event) => setInsolvencyReserves(event.target.value)}
+                      placeholder="0"
+                      className="mt-1 w-full rounded-md border border-orange-300/45 bg-slate-900/80 px-2 py-1 text-xs text-orange-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onSabotageInsolvency(Number(insolvencyReserves))}
+                      disabled={zkLoading}
+                      className="mt-2 w-full rounded-lg border border-orange-300/50 bg-orange-500/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-orange-100 transition hover:bg-orange-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Attempt: Liabilities &gt; Reserves
+                    </button>
+                  </div>
+
+                  <div className="rounded-lg border border-amber-400/40 bg-amber-950/30 p-3">
+                    <p className="text-xs font-semibold text-amber-300">Sabotage 3: Tamper with Cryptographic Proof</p>
+                    <p className="mt-1 text-[11px] text-slate-300">Mutate one nibble inside a proof hash value. Verification fails instantly at the pairing check.</p>
+                    <button
+                      type="button"
+                      onClick={onSabotageMutateProof}
+                      disabled={!zkPayload}
+                      className="mt-2 w-full rounded-lg border border-amber-300/50 bg-amber-500/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-amber-100 transition hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Mutate Proof Character
+                    </button>
+                  </div>
+
+                  {sabotageMessage ? (
+                    <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{sabotageMessage}</p>
+                  ) : null}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
 
         <section className="rounded-2xl border border-slate-500/30 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Verifier Inputs</p>
-          <div className="mt-3 grid gap-3">
-            <input
-              value={verifyRoot}
-              onChange={(event) => onVerifyRootChange(event.target.value)}
-              placeholder="Merkle Root"
-              className="ledger-input"
-            />
-            <input
-              value={verifyAddress}
-              onChange={(event) => onVerifyAddressChange(event.target.value)}
-              placeholder="User Public Address"
-              className="ledger-input"
-            />
-            <textarea
-              value={verifyProofInput}
-              onChange={(event) => onVerifyProofInputChange(event.target.value)}
-              placeholder="Proof Payload"
-              className="ledger-input min-h-24"
-            />
-          </div>
-          <button type="button" onClick={onVerifyProof} className="ledger-button mt-3 w-full">
-            Verify R1CS
-          </button>
-          <p className="mt-3 text-sm text-slate-200">
-            Result: <span className="font-semibold text-lime-300">{zkVerificationResult}</span>
-          </p>
-        </section>
-
-        <section className="rounded-2xl border border-slate-500/30 bg-slate-950/70 p-4 xl:col-span-2">
           <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Verifier Terminal</p>
           <div className={`mt-3 rounded-xl border p-3 ${verifierToneClass}`}>
             <div className="max-h-52 overflow-auto font-mono text-[11px] leading-5 text-lime-200">

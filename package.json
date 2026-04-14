@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "npm run web:dev",
     "setup": "node setup.js",
     "start": "node src/index.js",
     "web:dev": "npm --prefix web run dev",

@@ -5,7 +5,6 @@ import {
   Background,
   Controls,
   Handle,
-  MiniMap,
   Position,
   ReactFlow,
   type Edge,
@@ -222,7 +221,7 @@ export function MerkleTreeCanvas({
   const [buildPhase, setBuildPhase] = useState<BuildPhase>("input-stream");
   const [mergeTick, setMergeTick] = useState(0);
   const [pathRevealIndex, setPathRevealIndex] = useState(-1);
-  const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<NodeData, Edge> | null>(null);
+  const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<Node<NodeData>, Edge> | null>(null);
   const visualVars = useMemo(() => toVisualProfileStyle(visualProfile) as CSSProperties, [visualProfile]);
 
   const growsUpward = useMemo(() => {
@@ -789,7 +788,7 @@ export function MerkleTreeCanvas({
 
         <ReactFlow
           className="atlas-flow-pane"
-          onInit={setFlowInstance}
+          onInit={(instance) => setFlowInstance(instance)}
           nodes={flowData.nodes}
           edges={flowData.edges}
           nodeTypes={MERKLE_NODE_TYPES}
@@ -797,26 +796,10 @@ export function MerkleTreeCanvas({
           fitViewOptions={{ padding: 0.15 }}
           minZoom={0.35}
           maxZoom={1.5}
+          proOptions={{ hideAttribution: true }}
         >
           <Background color="rgba(148,163,184,0.18)" size={2} />
-          <MiniMap
-            pannable
-            zoomable
-            maskColor="rgba(15, 23, 42, 0.42)"
-            style={{
-              backgroundColor: "rgba(2, 6, 23, 0.84)",
-              border: "1px solid rgba(148, 163, 184, 0.35)",
-              borderRadius: 12,
-            }}
-            nodeColor={(node) => {
-              const data = node.data as NodeData;
-              if (data.isRoot) return "#facc15";
-              if (data.isPhantom && data.isPathRevealed) return "#22d3ee";
-              if (data.isPhantom) return "#334155";
-              return data.highlighted ? "#4ade80" : "#64748b";
-            }}
-          />
-          <Controls />
+          <Controls showInteractive={false} />
         </ReactFlow>
       </div>
 
@@ -893,11 +876,9 @@ export function MerkleTreeCanvas({
             <span className="w-10 text-right text-xs text-lime-200">{speed.toFixed(1)}x</span>
           </label>
 
-            {visualMode === "phantom" ? (
-              <span className="rounded-md border border-cyan-300/35 bg-cyan-500/10 px-2 py-1 text-[11px] uppercase tracking-[0.14em] text-cyan-100">
-                Phantom privacy mode
-              </span>
-            ) : null}
+          <span className="rounded-md border border-cyan-300/35 bg-cyan-500/10 px-2 py-1 text-[11px] uppercase tracking-[0.14em] text-cyan-100">
+            {visualMode === "phantom" ? "Privacy overlay" : "Standard view"}
+          </span>
 
           <input
             type="range"

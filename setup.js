@@ -1,246 +1,217 @@
 #!/usr/bin/env node
 
-/**
- * Circuit Setup Script
- * 
- * This script automates:
- * 1. Circuit compilation
- * 2. Powers of Tau download
- * 3. Proving key generation
- * 4. Verification key export
- */
-
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 
-const PROOFS_DIR = path.join(__dirname, "proofs");
-const CIRCUITS_DIR = path.join(__dirname, "circuits");
+const ROOT_DIR = __dirname;
+const PROOFS_DIR = path.join(ROOT_DIR, "proofs");
+const CIRCUITS_DIR = path.join(ROOT_DIR, "circuits");
+const SCRIPTS_DIR = path.join(ROOT_DIR, "scripts");
+const CIRCUIT_INDEX_PATH = path.join(PROOFS_DIR, "circuit-index.json");
+const DEFAULT_PTAU_POWER = Number(process.env.PTAU_POWER || 16);
 
-console.log("═══════════════════════════════════════════════════");
-console.log("   ZK-SNARK SOLVENCY PROOF - CIRCUIT SETUP");
-console.log("═══════════════════════════════════════════════════\n");
-
-// Helper function to run shell commands
 function run(command, description) {
-  console.log(`ℹ️  ${description}...`);
+  console.log(`- ${description}...`);
   try {
-    execSync(command, { stdio: "inherit", cwd: __dirname });
-    console.log(`✅ ${description} completed\n`);
+    execSync(command, { stdio: "inherit", cwd: ROOT_DIR });
     return true;
   } catch (error) {
-    console.error(`❌ ${description} failed`);
-    console.error(`   Error: ${error.message}\n`);
+    console.error(`Failed: ${description}`);
+    console.error(error.message);
     return false;
   }
 }
 
 function isValidPtau(ptauPath) {
-  if (!fs.existsSync(ptauPath)) {
-    return false;
-  }
-
+  if (!fs.existsSync(ptauPath)) return false;
   try {
-    execSync(`snarkjs powersoftau verify ${ptauPath}`, { stdio: "pipe", cwd: __dirname });
+    execSync(`snarkjs powersoftau verify "${ptauPath}"`, { stdio: "pipe", cwd: ROOT_DIR });
     return true;
   } catch {
     return false;
   }
 }
 
-async function setupCircuit() {
-  console.log("🔧 STEP 1: Verify Prerequisites\n");
-
-  // Check if circom is installed
+function ensurePrerequisites() {
   try {
     execSync("circom --version", { stdio: "pipe" });
-    console.log("✅ circom is installed\n");
   } catch {
-    console.error("❌ circom not found. Install with:");
-    console.error("   npm install -g circom");
-    console.error("   or see SETUP.md for more details\n");
-    process.exit(1);
+    throw new Error("circom not found. Install with: npm install -g circom");
   }
 
-  // Check if snarkjs is installed locally
-  if (!fs.existsSync(path.join(__dirname, "node_modules/snarkjs"))) {
-    console.log("📦 Installing dependencies...");
-    run("npm install", "Install Node dependencies");
-  } else {
-    console.log("✅ Dependencies already installed\n");
+  if (!fs.existsSync(path.join(ROOT_DIR, "node_modules", "snarkjs"))) {
+    if (!run("npm install", "Install Node dependencies")) {
+      throw new Error("Unable to install dependencies");
+    }
   }
+}
 
-  console.log("🔧 STEP 2: Compile Circuit\n");
-
-  // Check if circuit exists
+function compileCircuits() {
   const circuitPath = path.join(CIRCUITS_DIR, "Solvency.circom");
+  const compileScriptPath = path.join(SCRIPTS_DIR, "compile-circuits.js");
+
   if (!fs.existsSync(circuitPath)) {
-    console.error(`❌ Circuit not found at ${circuitPath}`);
-    process.exit(1);
+    throw new Error(`Circuit template not found: ${circuitPath}`);
+  }
+  if (!fs.existsSync(compileScriptPath)) {
+    throw new Error(`Compilation script not found: ${compileScriptPath}`);
   }
 
-  if (!run(`circom ${circuitPath} --r1cs --wasm --o ${PROOFS_DIR}`, "Compile circuit")) {
-    process.exit(1);
+  if (!run(`node "${compileScriptPath}"`, "Compile multi-variant circuits")) {
+    throw new Error("Circuit compilation failed");
   }
 
-  // Legacy circom builds may ignore --o and emit Solvency.r1cs/Solvency.wasm in project root.
-  const legacyR1cs = path.join(__dirname, "Solvency.r1cs");
-  const legacyWasm = path.join(__dirname, "Solvency.wasm");
-  const targetR1cs = path.join(PROOFS_DIR, "Solvency.r1cs");
-  const targetWasmDir = path.join(PROOFS_DIR, "Solvency_js");
-  const targetWasm = path.join(targetWasmDir, "Solvency.wasm");
-
-  if (fs.existsSync(legacyR1cs)) {
-    if (fs.existsSync(targetR1cs)) {
-      fs.rmSync(targetR1cs, { force: true });
-    }
-    fs.renameSync(legacyR1cs, targetR1cs);
-    console.log(`ℹ️  Moved legacy output: ${legacyR1cs} -> ${targetR1cs}`);
+  if (!fs.existsSync(CIRCUIT_INDEX_PATH)) {
+    throw new Error(`Circuit index not generated: ${CIRCUIT_INDEX_PATH}`);
   }
 
-  if (fs.existsSync(legacyWasm)) {
-    if (!fs.existsSync(targetWasmDir)) {
-      fs.mkdirSync(targetWasmDir, { recursive: true });
-    }
-    if (fs.existsSync(targetWasm)) {
-      fs.rmSync(targetWasm, { force: true });
-    }
-    fs.renameSync(legacyWasm, targetWasm);
-    console.log(`ℹ️  Moved legacy output: ${legacyWasm} -> ${targetWasm}`);
+  return JSON.parse(fs.readFileSync(CIRCUIT_INDEX_PATH, "utf-8"));
+}
+
+function ensurePtau() {
+  if (!Number.isInteger(DEFAULT_PTAU_POWER) || DEFAULT_PTAU_POWER < 14) {
+    throw new Error("PTAU_POWER must be an integer >= 14");
   }
 
-  console.log("🔧 STEP 3: Verify Compiled Artifacts\n");
+  const ptauPath = path.join(PROOFS_DIR, `pot${DEFAULT_PTAU_POWER}_final.ptau`);
 
-  const r1csPath = path.join(PROOFS_DIR, "Solvency.r1cs");
-  const wasmPath = path.join(PROOFS_DIR, "Solvency_js/Solvency.wasm");
+  if (isValidPtau(ptauPath)) return ptauPath;
 
-  if (!fs.existsSync(r1csPath)) {
-    console.error(`❌ R1CS file not found: ${r1csPath}`);
-    process.exit(1);
+  if (fs.existsSync(ptauPath)) {
+    fs.rmSync(ptauPath, { force: true });
   }
-  console.log(`✅ R1CS created: ${r1csPath}`);
 
-  if (!fs.existsSync(wasmPath)) {
-    console.error(`❌ WASM file not found: ${wasmPath}`);
-    process.exit(1);
-  }
-  console.log(`✅ WASM created: ${wasmPath}\n`);
-
-  console.log("🔧 STEP 4: Powers of Tau Setup\n");
-
-  const ptauPath = path.join(PROOFS_DIR, "pot14_final.ptau");
-
-  if (!isValidPtau(ptauPath)) {
-    if (fs.existsSync(ptauPath)) {
-      console.log("⚠️  Existing ptau file is invalid. Regenerating...\n");
-      fs.rmSync(ptauPath, { force: true });
-    }
-
-    console.log("⚠️  Powers of Tau file not found.");
-    console.log("📥  Downloading ptau file (this may take a few minutes)...\n");
-
-    // Try curl first, then wget
-    let downloadCmd;
+  let downloadCmd = null;
+  // Public hosted ptau URL is commonly available for power 14. For larger powers,
+  // generate locally by default so high-tier circuits (128/256) can be supported.
+  if (DEFAULT_PTAU_POWER === 14) {
     try {
       execSync("curl --version", { stdio: "pipe" });
-      downloadCmd = `curl -L https://hermez.s3-eu-west-1.amazonaws.com/powersOfTau28_hez_final_14.ptau -o ${ptauPath}`;
+      downloadCmd = `curl -L https://hermez.s3-eu-west-1.amazonaws.com/powersOfTau28_hez_final_14.ptau -o "${ptauPath}"`;
     } catch {
       try {
         execSync("wget --version", { stdio: "pipe" });
-        downloadCmd = `wget https://hermez.s3-eu-west-1.amazonaws.com/powersOfTau28_hez_final_14.ptau -O ${ptauPath}`;
+        downloadCmd = `wget https://hermez.s3-eu-west-1.amazonaws.com/powersOfTau28_hez_final_14.ptau -O "${ptauPath}"`;
       } catch {
-        console.error("❌ Neither curl nor wget found. Please install one of them.\n");
-        console.error("   Alternatively, download manually from:");
-        console.error("   https://hermez.s3-eu-west-1.amazonaws.com/powersOfTau28_hez_final_14.ptau\n");
-        console.error('   Then place it in the "proofs" directory.\n');
-        process.exit(1);
+        downloadCmd = null;
       }
     }
-
-    if (!run(downloadCmd, "Download Powers of Tau file (2.5 GB)")) {
-      console.log("⚠️  Download failed. Will generate a local ptau file instead.\n");
-    }
-
-    if (!isValidPtau(ptauPath)) {
-      console.log("🛠️  Generating local Powers of Tau (bn128, power 14)...\n");
-
-      const ptau0 = path.join(PROOFS_DIR, "pot14_0000.ptau");
-      const ptau1 = path.join(PROOFS_DIR, "pot14_0001.ptau");
-
-      if (!run(
-        `snarkjs powersoftau new bn128 14 ${ptau0} -v`,
-        "Generate initial ptau"
-      )) {
-        process.exit(1);
-      }
-
-      if (!run(
-        `snarkjs powersoftau contribute ${ptau0} ${ptau1} --name=\"Local contribution\" -v -e=\"entropy-for-local-setup\"`,
-        "Contribute entropy"
-      )) {
-        process.exit(1);
-      }
-
-      if (!run(
-        `snarkjs powersoftau prepare phase2 ${ptau1} ${ptauPath} -v`,
-        "Prepare phase2 ptau"
-      )) {
-        process.exit(1);
-      }
-
-      fs.rmSync(ptau0, { force: true });
-      fs.rmSync(ptau1, { force: true });
-    }
-  } else {
-    console.log(`✅ Powers of Tau already available: ${ptauPath}\n`);
   }
 
-  console.log("🔧 STEP 5: Generate Proving and Verification Keys\n");
-
-  const zkeyPath = path.join(PROOFS_DIR, "Solvency_final.zkey");
-  const vkeyPath = path.join(PROOFS_DIR, "verification_key.json");
-
-  // Generate proving key
-  if (!fs.existsSync(zkeyPath)) {
-    if (!run(
-      `snarkjs plonk setup ${r1csPath} ${ptauPath} ${zkeyPath}`,
-      "Generate proving key (this may take a minute)"
-    )) {
-      process.exit(1);
-    }
-  } else {
-    console.log(`✅ Proving key already exists: ${zkeyPath}\n`);
+  if (downloadCmd) {
+    run(downloadCmd, "Download Powers of Tau file");
   }
 
-  // Export verification key
-  if (!fs.existsSync(vkeyPath)) {
-    if (!run(
-      `snarkjs zkey export verificationkey ${zkeyPath} ${vkeyPath}`,
-      "Export verification key"
-    )) {
-      process.exit(1);
-    }
-  } else {
-    console.log(`✅ Verification key already exists: ${vkeyPath}\n`);
+  if (isValidPtau(ptauPath)) return ptauPath;
+
+  const ptau0 = path.join(PROOFS_DIR, `pot${DEFAULT_PTAU_POWER}_0000.ptau`);
+  const ptau1 = path.join(PROOFS_DIR, `pot${DEFAULT_PTAU_POWER}_0001.ptau`);
+
+  if (!run(`snarkjs powersoftau new bn128 ${DEFAULT_PTAU_POWER} "${ptau0}" -v`, `Generate initial ptau (power ${DEFAULT_PTAU_POWER})`)) {
+    throw new Error("Failed to create initial ptau");
+  }
+  if (!run(`snarkjs powersoftau contribute "${ptau0}" "${ptau1}" --name="Local contribution" -v -e="entropy-for-local-setup"`, "Contribute entropy")) {
+    throw new Error("Failed to contribute entropy");
+  }
+  if (!run(`snarkjs powersoftau prepare phase2 "${ptau1}" "${ptauPath}" -v`, "Prepare phase2 ptau")) {
+    throw new Error("Failed to prepare phase2 ptau");
   }
 
-  console.log("═══════════════════════════════════════════════════");
-  console.log("         ✅ SETUP COMPLETED SUCCESSFULLY!");
-  console.log("═══════════════════════════════════════════════════\n");
-
-  console.log("✨ You can now run the application:\n");
-  console.log("   node src/index.js\n");
-
-  console.log("📋 Next Steps:\n");
-  console.log("   1. Run the application with: node src/index.js");
-  console.log("   2. Choose mode 2️⃣ to generate a solvency proof");
-  console.log("   3. Choose mode 4️⃣ to verify the proof\n");
-
-  console.log("📚 For more details, see SETUP.md\n");
+  fs.rmSync(ptau0, { force: true });
+  fs.rmSync(ptau1, { force: true });
+  return ptauPath;
 }
 
-// Run setup
-setupCircuit().catch((error) => {
-  console.error("❌ Unexpected error:", error);
+function generateKeys(circuitIndex, ptauPath) {
+  const readyVariants = [];
+  const failedVariants = [];
+
+  for (const N of circuitIndex.variants) {
+    const map = circuitIndex.mapping[N];
+    const r1csPath = path.join(PROOFS_DIR, map.r1cs);
+    const zkeyPath = path.join(PROOFS_DIR, map.zkey);
+    const vkeyPath = path.join(PROOFS_DIR, map.vkey);
+
+    if (!fs.existsSync(r1csPath)) {
+      console.log(`Skipping N=${N}: missing R1CS`);
+      failedVariants.push(N);
+      continue;
+    }
+
+    const tryGenerateZkey = () =>
+      run(
+        `snarkjs plonk setup "${r1csPath}" "${ptauPath}" "${zkeyPath}"`,
+        `Generate proving key for N=${N}`
+      );
+
+    const tryExportVkey = () =>
+      run(
+        `snarkjs zkey export verificationkey "${zkeyPath}" "${vkeyPath}"`,
+        `Export verification key for N=${N}`
+      );
+
+    // If both exist already, keep them.
+    if (!fs.existsSync(zkeyPath) || !fs.existsSync(vkeyPath)) {
+      // If vkey is missing, force a fresh zkey generation to avoid using stale/corrupt zkey.
+      if (!fs.existsSync(vkeyPath)) {
+        if (fs.existsSync(zkeyPath)) {
+          fs.rmSync(zkeyPath, { force: true });
+        }
+      }
+
+      if (!fs.existsSync(zkeyPath)) {
+        if (!tryGenerateZkey()) {
+          failedVariants.push(N);
+          continue;
+        }
+      }
+
+      if (!fs.existsSync(vkeyPath)) {
+        if (!tryExportVkey()) {
+          failedVariants.push(N);
+          continue;
+        }
+      }
+    }
+
+    readyVariants.push(N);
+  }
+
+  if (readyVariants.length === 0) {
+    throw new Error("No proving/verification keys were generated");
+  }
+
+  return { readyVariants, failedVariants };
+}
+
+async function main() {
+  console.log("=== ZK Solvency Multi-Circuit Setup ===");
+  ensurePrerequisites();
+  const circuitIndex = compileCircuits();
+  const ptauPath = ensurePtau();
+  const { readyVariants, failedVariants } = generateKeys(circuitIndex, ptauPath);
+
+  // Persist only ready variants so runtime selection cannot pick unsupported tiers.
+  const filteredIndex = {
+    variants: readyVariants,
+    default: readyVariants[0],
+    mapping: {}
+  };
+  for (const N of readyVariants) {
+    filteredIndex.mapping[N] = circuitIndex.mapping[N];
+  }
+  fs.writeFileSync(CIRCUIT_INDEX_PATH, JSON.stringify(filteredIndex, null, 2));
+
+  console.log("Setup completed successfully.");
+  console.log(`Circuit variants ready: ${readyVariants.join(", ")}`);
+  if (failedVariants.length > 0) {
+    console.log(`Skipped variants (ptau too small or keygen failed): ${failedVariants.join(", ")}`);
+  }
+  console.log("Run: npm start");
+}
+
+main().catch((error) => {
+  console.error(error.message || error);
   process.exit(1);
 });

@@ -7,8 +7,57 @@ import {
 export const runtime = "nodejs";
 
 type InputUserRow = { name?: string; accountId?: string; balance?: number | string };
+type SnapshotNode = {
+  nodeId: string;
+  level: number;
+  index: number;
+  hash: string;
+  hashShort: string;
+  sum: string;
+  userId?: string | null;
+  leftChildId?: string;
+  rightChildId?: string | null;
+};
 
-const MAX_USERS = 50;
+type TreeSnapshot = ReturnType<typeof buildTreeSnapshot>;
+type ExtendedTreeSnapshot = TreeSnapshot & {
+  leafGenerationSequence?: Array<{
+    inputRowIndex: number;
+    accountId: string;
+    targetNodeId: string;
+    delayMs: number;
+  }>;
+  mergeMetadata?: Array<{
+    parentNodeId: string;
+    leftChildId: string;
+    rightChildId: string;
+    leftSum: string;
+    rightSum: string;
+    parentSum: string;
+    isSelfMerge: boolean;
+    level: number;
+    index: number;
+  }>;
+  proofPhantomPath?: {
+    leafNodeId: string | null;
+    rootNodeId: string;
+    stepSequence: Array<{
+      step: number;
+      treeNodeId: string;
+      position: "left" | "right" | "self";
+      siblingNodeId: string | null;
+      estimatedGateIndex: number;
+    }>;
+  };
+  constraintSnapshot?: {
+    balanceInputs: string[];
+    partialSums: string[];
+    totalLiabilities: string;
+    constraintGateCount: number;
+  };
+};
+
+const MAX_USERS = 256;
 
 function normalizeUsers(rows: InputUserRow[]) {
   const seen = new Set<string>();
@@ -73,11 +122,11 @@ function buildLeafGenerationSequence(
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 }
 
-function buildMergeMetadata(snapshot: ReturnType<typeof buildTreeSnapshot>) {
-  const nodeById = new Map<string, (typeof snapshot.levels)[number][number]>();
+function buildMergeMetadata(snapshot: TreeSnapshot) {
+  const nodeById = new Map<string, SnapshotNode>();
   for (const level of snapshot.levels) {
-    for (const node of level) {
-      nodeById.set(node.nodeId, node);
+    for (const node of level as SnapshotNode[]) {
+      nodeById.set(node.nodeId, node as SnapshotNode);
     }
   }
 
@@ -94,7 +143,7 @@ function buildMergeMetadata(snapshot: ReturnType<typeof buildTreeSnapshot>) {
   }> = [];
 
   for (const level of snapshot.levels) {
-    for (const node of level) {
+    for (const node of level as SnapshotNode[]) {
       if (!node.leftChildId) {
         continue;
       }
@@ -125,7 +174,7 @@ function buildMergeMetadata(snapshot: ReturnType<typeof buildTreeSnapshot>) {
 }
 
 function buildProofPhantomPath(
-  snapshot: ReturnType<typeof buildTreeSnapshot>,
+  snapshot: TreeSnapshot,
   proof: ReturnType<typeof buildProofTrace>,
 ) {
   const sourceToParent = new Map<string, string>();
@@ -138,7 +187,7 @@ function buildProofPhantomPath(
     parentToChildren.set(edge.target, children);
   }
 
-  const levelZeroNodes = snapshot.levels[0] ?? [];
+  const levelZeroNodes = (snapshot.levels[0] ?? []) as SnapshotNode[];
   const leafNode = levelZeroNodes.find((node) => String(node.userId ?? "") === proof.userId);
   const leafNodeId = leafNode?.nodeId ?? null;
 
@@ -172,7 +221,7 @@ function buildProofPhantomPath(
     stepSequence.push({
       step: proofStep.step,
       treeNodeId: currentNodeId,
-      position: proofStep.position,
+      position: proofStep.position as "left" | "right" | "self",
       siblingNodeId,
       estimatedGateIndex: proofStep.step * 6 + 3,
     });
@@ -198,14 +247,14 @@ function buildProofPhantomPath(
 }
 
 function buildConstraintSnapshot(
-  snapshot: ReturnType<typeof buildTreeSnapshot>,
+  snapshot: TreeSnapshot,
   users: Array<{ id: string; balance: number }>,
   proofStepsCount: number,
 ) {
   const balanceById = new Map(users.map((user) => [user.id, user.balance]));
   const balanceInputs = snapshot.leafOrder.map((accountId) => String(balanceById.get(accountId) ?? 0));
 
-  let cumulative = 0n;
+  let cumulative = BigInt(0);
   const partialSums: string[] = [];
   for (const value of balanceInputs) {
     cumulative += BigInt(value);
@@ -247,9 +296,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "selectedUserId must reference an existing accountId" }, { status: 400 });
     }
 
-    const snapshot = buildTreeSnapshot(normalizedUsers);
+    const snapshot = buildTreeSnapshot(normalizedUsers) as ExtendedTreeSnapshot;
+    const levelZeroNodes = (snapshot.levels[0] ?? []) as SnapshotNode[];
     const levelZeroNodeByAccountId = new Map(
-      (snapshot.levels[0] ?? [])
+      levelZeroNodes
         .filter((node) => Boolean(node.userId))
         .map((node) => [String(node.userId), node.nodeId]),
     );

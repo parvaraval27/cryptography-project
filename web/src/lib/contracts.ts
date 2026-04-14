@@ -171,6 +171,9 @@ export type ZkVisualizationPayload = {
   fingerprint: string;
   createdAt: string;
   isValid: boolean;
+  circuitVariant: number;
+  merkleRoot: string;
+  proofEnvelopeType: string;
   metadata: {
     reserves: string;
     usersProvided: number;
@@ -178,6 +181,31 @@ export type ZkVisualizationPayload = {
   };
   publicSignalCount: number;
   commitmentCount: number;
+  couplingStatus: "linked" | "mismatched" | "missing";
+  verificationReasonCode?: string;
+  verificationPipelines?: Array<{
+    id: string;
+    title: string;
+    checks: Array<{
+      label: string;
+      passed: boolean;
+    }>;
+  }>;
+  publicSignalsBreakdown?: {
+    reservesPublic: string;
+    merkleRootPublic: string;
+    labels: string[];
+  };
+  explanation?: {
+    architecture: string;
+    verifierPipelines: Array<{
+      id: string;
+      title: string;
+      checks: string[];
+    }>;
+    privateWitnessSummary: string;
+    publicSignalSummary: string;
+  };
   stages: ZkStagePayload[];
   metrics: ZkMetricPayload[];
   stageProgress?: Record<string, number>;

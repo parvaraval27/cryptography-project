@@ -9,6 +9,7 @@ const {
   generateAndProve,
   loadAndVerifyProof
 } = require("./zkProof");
+const { getMerkleRootForCircuit } = require("./merkleIntegration");
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -104,6 +105,7 @@ function solvencyProverMode() {
     try {
       const reserves = BigInt(reservesInput);
       const balances = users.map(u => BigInt(u.balance));
+      const merkleRoot = getMerkleRootForCircuit(users);
 
       // Calculate actual sum for reference
       const actualSum = balances.reduce((a, b) => a + b, BigInt(0));
@@ -123,6 +125,8 @@ function solvencyProverMode() {
       // Generate proof
       await generateAndProve(balances, reserves, {
         verify: true,
+        merkleRoot,
+        users,
         savePath: require("path").join(__dirname, "../proofs/solvency_proof.json")
       });
 

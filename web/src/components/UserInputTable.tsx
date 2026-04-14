@@ -118,7 +118,13 @@ export function UserInputTable({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <div className="mt-4 flex flex-col items-center gap-3 text-center">
+        {rowErrors.length > 0 ? (
+          <p className="text-sm text-rose-300">{rowErrors[0]}</p>
+        ) : (
+          <p className="text-sm text-slate-300">Enter up to 256 accounts.</p>
+        )}
+
         <label className="flex items-center gap-2 rounded-xl border border-slate-500/35 bg-slate-900/70 px-3 py-2">
           <span className="text-sm text-slate-300">Focus account</span>
           <select
@@ -138,12 +144,6 @@ export function UserInputTable({
             })}
           </select>
         </label>
-
-        {rowErrors.length > 0 ? (
-          <p className="text-sm text-rose-300">{rowErrors[0]}</p>
-        ) : (
-          <p className="text-sm text-slate-300">Enter up to 50 accounts for cinematic rendering quality.</p>
-        )}
       </div>
 
       {formError ? <p className="mt-2 text-sm text-rose-300">{formError}</p> : null}

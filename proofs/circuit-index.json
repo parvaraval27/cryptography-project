@@ -1,0 +1,42 @@
+{
+  "variants": [
+    16,
+    32,
+    64,
+    128,
+    256
+  ],
+  "default": 16,
+  "mapping": {
+    "16": {
+      "r1cs": "Solvency_16.r1cs",
+      "wasm": "Solvency_16_js\\Solvency.wasm",
+      "zkey": "Solvency_16.zkey",
+      "vkey": "Solvency_16_vkey.json"
+    },
+    "32": {
+      "r1cs": "Solvency_32.r1cs",
+      "wasm": "Solvency_32_js\\Solvency.wasm",
+      "zkey": "Solvency_32.zkey",
+      "vkey": "Solvency_32_vkey.json"
+    },
+    "64": {
+      "r1cs": "Solvency_64.r1cs",
+      "wasm": "Solvency_64_js\\Solvency.wasm",
+      "zkey": "Solvency_64.zkey",
+      "vkey": "Solvency_64_vkey.json"
+    },
+    "128": {
+      "r1cs": "Solvency_128.r1cs",
+      "wasm": "Solvency_128_js\\Solvency.wasm",
+      "zkey": "Solvency_128.zkey",
+      "vkey": "Solvency_128_vkey.json"
+    },
+    "256": {
+      "r1cs": "Solvency_256.r1cs",
+      "wasm": "Solvency_256_js\\Solvency.wasm",
+      "zkey": "Solvency_256.zkey",
+      "vkey": "Solvency_256_vkey.json"
+    }
+  }
+}

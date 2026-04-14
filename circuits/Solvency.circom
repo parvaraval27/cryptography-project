@@ -13,7 +13,9 @@ template RangeCheck(N) {
 template Solvency(N) {
   signal input balances[N];
   signal input reserves;
-  signal output reservesPublic;
+    signal input merkleRoot;
+    signal output reservesPublic;
+    signal output merkleRootPublic;
   signal partial_sum[N];
   component balanceChecks[N];
   for (var i = 0; i < N; i++) {
@@ -31,6 +33,7 @@ template Solvency(N) {
   component diffCheck = RangeCheck(256);
   diffCheck.in <== difference;
   reservesPublic <== reserves;
+    merkleRootPublic <== merkleRoot;
 }
 
 component main = Solvency(16);

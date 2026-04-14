@@ -38,7 +38,7 @@ async function demo() {
 
   const reserves = BigInt(500);
 
-  console.log("📊 SETUP\n");
+  console.log(" SETUP\n");
   console.log("Users:");
   users.forEach((u, i) => {
     console.log(`  ${i + 1}. ${u.id}: ${u.balance}`);
