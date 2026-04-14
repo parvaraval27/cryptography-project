@@ -9,6 +9,9 @@ import type {
   SnapshotResponse,
   UserEntryRow,
   ZkProverEventPayload,
+  ZkVerificationPayload,
+  ZkVerifyRequest,
+  ZkVerifyResponse,
   ZkVerifierLogPayload,
   ZkVisualizationPayload,
 } from "@/lib/contracts";
@@ -222,6 +225,12 @@ export default function Home() {
       }
 
       setZkPayload(body);
+      if (body.verificationPayload) {
+        const serializedPayload = JSON.stringify(body.verificationPayload, null, 2);
+        setVerifyProofInput(serializedPayload);
+        setBaselineProofInput(serializedPayload);
+        setProofTampered(false);
+      }
       return body;
     } catch (requestError) {
       setZkError(requestError instanceof Error ? requestError.message : "Unknown error");
@@ -259,9 +268,8 @@ export default function Home() {
       setPayload(body);
       setVerifyRoot(body.snapshot.root.hash);
       setVerifyAddress(body.proof.userId);
-      const canonicalProofPayload = JSON.stringify(body.proof.proof, null, 2);
-      setVerifyProofInput(canonicalProofPayload);
-      setBaselineProofInput(canonicalProofPayload);
+      setVerifyProofInput("");
+      setBaselineProofInput("");
       setProofTampered(false);
       setPeekMessage(null);
       setZkVerificationResult("Pending");
@@ -444,7 +452,7 @@ export default function Home() {
     };
   }
 
-  function handleVerifyProof() {
+  async function handleVerifyProof() {
     if (!verifyRoot || !verifyAddress || !verifyProofInput.trim()) {
       setVerifierPhase("failed");
       setZkVerificationResult("Rejected: incomplete verification payload");
@@ -458,34 +466,61 @@ export default function Home() {
     setVerifierPhase("checking");
     setZkVerificationResult("Checking...");
 
-    const rootMatch = payload?.snapshot.root.hash === verifyRoot;
-    const addressKnown = rows.some((row) => row.accountId === verifyAddress);
-    const proofAvailable = verifyProofInput.trim().length > 8;
-    const proofUntampered = verifyProofInput.trim() === baselineProofInput.trim() && !proofTampered;
-    const verified = Boolean(rootMatch && addressKnown && proofAvailable && proofUntampered && zkPayload?.isValid);
-
-    const verifierLog: ZkVerifierLogPayload[] = zkPayload?.verifierLog ?? [
-      { step: 1, label: proofUntampered ? "receipt integrity intact" : "receipt integrity broken", passed: proofAvailable && proofUntampered },
-      { step: 2, label: "root context and transcript matched", passed: rootMatch && addressKnown },
-      { step: 3, label: verified ? "pairing equation accepted" : "pairing equation mismatch", passed: verified },
-    ];
-
-    setVerifierTerminalLines(["verifier:: session start"]);
-    queueVerifierTerminalLines(verifierLog, setVerifierTerminalLines);
-
-    const verificationResultDelayMs = 200 + verifierLog.length * 240 + 120;
-    globalThis.setTimeout(() => {
-      setVerifierPhase(verified ? "passed" : "failed");
-      setZkVerificationResult(verified ? "Proof Verified" : "Verification Failed");
-      setVerifierTerminalLines((current) => [
-        ...current,
-        verified
-          ? "RESULT: The math proves this user is solvent and included in the exchange, but their balance remains 100% hidden."
-          : proofUntampered
-            ? "RESULT: Verification failed. The receipt does not satisfy the public solvency checks."
-            : "ERROR: Cryptographic seal broken. Data was tampered with.",
+    let verificationPayload: ZkVerificationPayload;
+    try {
+      verificationPayload = JSON.parse(verifyProofInput) as ZkVerificationPayload;
+    } catch {
+      setVerifierPhase("failed");
+      setZkVerificationResult("Rejected: malformed verification payload");
+      setVerifierTerminalLines([
+        "verifier:: session start",
+        "error:: payload is not valid JSON",
       ]);
-    }, verificationResultDelayMs);
+      return;
+    }
+
+    try {
+      const verifyRequest: ZkVerifyRequest = {
+        verificationPayload,
+        verifyRoot,
+        verifyAddress,
+        knownAccountIds: rows.map((row) => row.accountId.trim()).filter(Boolean),
+      };
+
+      const response = await fetch("/api/zk/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(verifyRequest),
+      });
+
+      const verifyBody = (await response.json()) as ZkVerifyResponse & { error?: string };
+      const verifierLog: ZkVerifierLogPayload[] = verifyBody.verifierLog ?? [];
+
+      setVerifierTerminalLines(["verifier:: session start"]);
+      if (verifierLog.length > 0) {
+        queueVerifierTerminalLines(verifierLog, setVerifierTerminalLines);
+      }
+
+      const verificationResultDelayMs = 200 + verifierLog.length * 240 + 120;
+      globalThis.setTimeout(() => {
+        const passed = verifyBody.isValid && verifyBody.verifierPhase === "passed";
+        setVerifierPhase(passed ? "passed" : "failed");
+        setZkVerificationResult(passed ? "Proof Verified" : "Verification Failed");
+        setVerifierTerminalLines((current) => [
+          ...current,
+          passed
+            ? "RESULT: Cryptographic verifier accepted the proof and public signals."
+            : `ERROR: ${verifyBody.message || "Verification failed"} (${verifyBody.verificationReasonCode || "unknown"})`,
+        ]);
+      }, verificationResultDelayMs);
+    } catch (verifyError) {
+      setVerifierPhase("failed");
+      setZkVerificationResult("Verification Failed");
+      setVerifierTerminalLines([
+        "verifier:: session start",
+        `error:: ${verifyError instanceof Error ? verifyError.message : "Unknown verification error"}`,
+      ]);
+    }
   }
 
   async function handleSabotageRangeCheck(balanceToInject: number) {

@@ -306,6 +306,14 @@ async function buildVisualizationPayload(envelope: any, workspaceRoot: string) {
     estimatedMs: verificationEventDelay,
   } as const;
 
+  const verificationPayload = {
+    proof,
+    publicSignals: publicSignals.map((signal) => String(signal)),
+    publicSignalLabels,
+    circuitVariant,
+    merkleRootPublic: publicMerkleRoot,
+  } as const;
+
   const metrics = [
     {
       label: "Public Signals",
@@ -360,6 +368,7 @@ async function buildVisualizationPayload(envelope: any, workspaceRoot: string) {
     proverGeometry,
     verifierCrystal,
     proofAssemblyProgress,
+    verificationPayload,
   };
 }
 

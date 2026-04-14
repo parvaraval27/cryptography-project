@@ -165,6 +165,37 @@ export type ProofAssemblyProgressPayload = {
   estimatedMs: number;
 };
 
+export type ZkVerificationPayload = {
+  proof: unknown;
+  publicSignals: string[];
+  publicSignalLabels: string[];
+  circuitVariant: number;
+  merkleRootPublic: string;
+};
+
+export type ZkVerifyRequest = {
+  verificationPayload: ZkVerificationPayload;
+  verifyRoot: string;
+  verifyAddress: string;
+  knownAccountIds: string[];
+};
+
+export type ZkVerifyResponse = {
+  isValid: boolean;
+  verifierPhase: "passed" | "failed";
+  verificationReasonCode:
+    | "ok"
+    | "missing-verification-input"
+    | "unknown-address"
+    | "malformed-proof-payload"
+    | "public-root-mismatch"
+    | "signal-root-mismatch"
+    | "missing-verification-key"
+    | "pairing-check-failed";
+  message: string;
+  verifierLog: ZkVerifierLogPayload[];
+};
+
 export type ZkVisualizationPayload = {
   protocol: string;
   curve: string;
@@ -214,4 +245,5 @@ export type ZkVisualizationPayload = {
   proverGeometry?: ProverGeometryPayload;
   verifierCrystal?: VerifierCrystalPayload;
   proofAssemblyProgress?: ProofAssemblyProgressPayload;
+  verificationPayload?: ZkVerificationPayload;
 };
