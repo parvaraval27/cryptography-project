@@ -1,12 +1,12 @@
-const SHA256 = require("crypto-js/sha256");
+const { createHash } = require("crypto");
 
 // safer encoding
 function hashLeaf(id, balance) {
-  return SHA256(`${id}:${balance}`).toString();
+  return createHash("sha256").update(`${id}:${balance}`).digest("hex");
 }
 
 function hashNode(leftHash, rightHash) {
-  return SHA256(leftHash + rightHash).toString();
+  return createHash("sha256").update(leftHash + rightHash).digest("hex");
 }
 
 module.exports = { hashLeaf, hashNode };
