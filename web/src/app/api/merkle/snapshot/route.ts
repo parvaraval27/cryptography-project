@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   buildProofTrace,
   buildTreeSnapshot,
-} from "../../../../../../src/treeSnapshot";
+} from "merkle_tree/src/treeSnapshot.js";
 
 export const runtime = "nodejs";
 

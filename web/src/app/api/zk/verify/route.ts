@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { verifyProof } from "../../../../../../src/zkProof";
+import { verifyProof } from "merkle_tree/src/zkProof.js";
 import type { ZkVerifyRequest, ZkVerifyResponse } from "@/lib/contracts";
 
 export const runtime = "nodejs";

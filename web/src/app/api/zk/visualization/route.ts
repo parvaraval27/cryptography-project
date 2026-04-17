@@ -2,8 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { generateAndProve, verifyProof } from "../../../../../../src/zkProof";
-import { computeMerkleRootFromUsers } from "../../../../../../src/merkleIntegration";
+import { generateAndProve, verifyProof } from "merkle_tree/src/zkProof.js";
+import { computeMerkleRootFromUsers } from "merkle_tree/src/merkleIntegration.js";
 
 export const runtime = "nodejs";
 
