@@ -715,28 +715,28 @@ export default function Home() {
         id: "input",
         label: "01",
         title: "Enter balances",
-        description: "Prepare the exchange accounts and choose the focus account for the snapshot.",
+        description: "Prepare exchange accounts. Private inputs: accountId + balance per user.",
         href: "#step-input",
       },
       {
         id: "tree",
         label: "02",
         title: "Build Merkle tree",
-        description: "Generate the snapshot and watch the inclusion path form.",
+        description: "SHA-256 Merkle Sum Tree commits to all balances. Root becomes a public signal.",
         href: "#step-tree",
       },
       {
         id: "proof",
         label: "03",
-        title: "Generate zk proof",
-        description: "Bind the public Merkle root and solvency status into one proof flow.",
+        title: "Circom → PLONK proof",
+        description: "Witness generator feeds private data into the circuit. PLONK prover emits a ≈800-byte proof.",
         href: "#step-proof",
       },
       {
         id: "verify",
         label: "04",
-        title: "Verify and inspect",
-        description: "Check the proof, inspect the transcript, and review the tamper tests.",
+        title: "Verify & attack tests",
+        description: "BN254 pairing check verifies the proof. Try three cryptographic attack scenarios.",
         href: "#step-proof",
       },
     ],
@@ -832,8 +832,10 @@ export default function Home() {
       <section id="step-proof" className="step-shell border-lime-400/30 scroll-mt-6">
         <div className="step-heading">
           <span className="step-index">STEP 3</span>
-          <h2 className="step-title">zk-SNARK Proof Stream</h2>
-          <p className="ml-auto text-xs text-slate-400">Proof generation, verification, and inspection happen here.</p>
+          <h2 className="step-title">zk-SNARK Proof Flow</h2>
+          <p className="ml-auto text-xs text-slate-400">
+            Click nodes in the flow diagram to inspect each stage — inputs, circuit, witness, keys, proof generation, public signals, verifier, and attacker tests.
+          </p>
         </div>
 
         {merkleCompleted ? (
