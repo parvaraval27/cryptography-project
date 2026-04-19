@@ -253,7 +253,7 @@ export function MerkleTreeCanvas({
     return () => {
       timers.forEach((timer) => globalThis.clearTimeout(timer));
     };
-  }, [snapshot.root.hash, snapshot.levels.length]);
+  }, [buildPhase, snapshot.leafGenerationSequence, snapshot.root.hash, snapshot.levels.length]);
 
   useEffect(() => {
     if (!isAnimating) {

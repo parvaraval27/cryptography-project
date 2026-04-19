@@ -16,6 +16,30 @@ type VisualizationInputRow = {
   balance?: number | string;
 };
 
+type VisualizationRequestBody = {
+  users?: VisualizationInputRow[];
+  merkleRoot?: string;
+  reserves?: number | string;
+};
+
+type ProofEnvelope = {
+  [key: string]: unknown;
+  proof?: Record<string, unknown>;
+  publicSignals?: unknown[];
+  publicSignalLabels?: unknown[];
+  circuitVariant?: number;
+  merkleRoot?: string;
+  merkleRootPublic?: string;
+  metadata?: {
+    variant?: number;
+    reserves?: string;
+    usersProvided?: number;
+    maxUsers?: number;
+  };
+  type?: string;
+  createdAt?: string;
+};
+
 function parseNonNegativeInteger(value: unknown, label: string) {
   const normalized = String(value ?? "").trim();
   if (!/^\d+$/.test(normalized)) {
@@ -51,7 +75,7 @@ function getPairingEquation(step: number) {
   return "pairing equation over verification key";
 }
 
-async function buildVisualizationPayload(envelope: any, workspaceRoot: string) {
+async function buildVisualizationPayload(envelope: ProofEnvelope, workspaceRoot: string) {
   const proof = envelope?.proof;
   const publicSignals = envelope?.publicSignals;
   const publicSignalLabels = Array.isArray(envelope?.publicSignalLabels)
@@ -117,20 +141,20 @@ async function buildVisualizationPayload(envelope: any, workspaceRoot: string) {
   };
 
   const explanation = {
-    architecture: "coupled",
+    architecture: "dual-proof-linked",
     verifierPipelines: [
       {
         id: "merkle-consistency",
-        title: "Pipeline A: Data Consistency (Merkle)",
+        title: "Pipeline A: Merkle Proof Consistency",
         checks: [
           "Leaf hash recomputation",
           "Merkle path/root consistency",
-          "Root coupling against proof envelope",
+          "Root-link consistency against zk public signal",
         ],
       },
       {
         id: "snark-solvency",
-        title: "Pipeline B: Solvency Math (zk-SNARK)",
+        title: "Pipeline B: zk-SNARK Solvency Proof",
         checks: [
           "Public signal extraction",
           "Polynomial commitment opening checks",
@@ -138,14 +162,14 @@ async function buildVisualizationPayload(envelope: any, workspaceRoot: string) {
         ],
       },
     ],
-    privateWitnessSummary: "User balances remain private witness values and are never emitted in public signals.",
-    publicSignalSummary: "Only reservesPublic and merkleRootPublic are exposed for verification.",
+    privateWitnessSummary: "User balances remain private witness values in the zk proof and are never emitted in public signals.",
+    publicSignalSummary: "Only reservesPublic and merkleRootPublic are exposed, and these signals link the Merkle and zk proofs.",
   };
 
   const verificationPipelines = [
     {
       id: "merkle-consistency",
-      title: "Pipeline A: Data Consistency (Merkle)",
+      title: "Pipeline A: Merkle Proof Consistency",
       checks: [
         {
           label: "Merkle root is present in proof envelope",
@@ -163,7 +187,7 @@ async function buildVisualizationPayload(envelope: any, workspaceRoot: string) {
     },
     {
       id: "snark-solvency",
-      title: "Pipeline B: Solvency Math (zk-SNARK)",
+      title: "Pipeline B: zk-SNARK Solvency Proof",
       checks: [
         {
           label: "Public signals decoded",
@@ -395,7 +419,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as VisualizationRequestBody;
     const users = body?.users as VisualizationInputRow[] | undefined;
 
     if (!Array.isArray(users) || users.length === 0) {

@@ -15,6 +15,15 @@ export type SnapshotRequest = {
   selectedUserId?: string;
 };
 
+export type ZkVisualizationRequest = {
+  users: Array<{
+    accountId: string;
+    balance: number | string;
+  }>;
+  merkleRoot?: string;
+  reserves?: string;
+};
+
 export type MerkleNodePayload = {
   nodeId: string;
   level: number;

@@ -5,7 +5,9 @@ import type { UserEntryRow } from "@/lib/contracts";
 type UserInputTableProps = {
   rows: UserEntryRow[];
   selectedUserId: string;
+  reservesInput: string;
   rowErrors: string[];
+  reservesError: string | null;
   formError: string | null;
   submitting: boolean;
   onRowChange: (index: number, key: keyof UserEntryRow, value: string) => void;
@@ -13,13 +15,16 @@ type UserInputTableProps = {
   onRemoveRow: (index: number) => void;
   onResetSample: () => void;
   onSelectedUserChange: (nextUserId: string) => void;
+  onReservesChange: (value: string) => void;
   onGenerate: () => void;
 };
 
 export function UserInputTable({
   rows,
   selectedUserId,
+  reservesInput,
   rowErrors,
+  reservesError,
   formError,
   submitting,
   onRowChange,
@@ -27,6 +32,7 @@ export function UserInputTable({
   onRemoveRow,
   onResetSample,
   onSelectedUserChange,
+  onReservesChange,
   onGenerate,
 }: Readonly<UserInputTableProps>) {
   return (
@@ -124,6 +130,19 @@ export function UserInputTable({
         ) : (
           <p className="text-sm text-slate-300">Enter up to 256 accounts.</p>
         )}
+
+        <label className="flex w-full max-w-xl flex-col gap-2 rounded-xl border border-slate-500/35 bg-slate-900/70 px-3 py-3 text-left">
+          <span className="text-sm text-slate-300">Exchange reserves</span>
+          <input
+            value={reservesInput}
+            onChange={(event) => onReservesChange(event.target.value)}
+            inputMode="numeric"
+            placeholder="Leave blank to auto-use total liabilities"
+            className="rounded-md border border-slate-500/40 bg-slate-900 px-2 py-1 text-sm text-slate-100 outline-none focus:border-lime-300/60"
+          />
+          <span className="text-xs text-slate-500">Optional. Must be a non-negative integer. Blank keeps the current auto-default behavior.</span>
+          {reservesError ? <span className="text-xs text-rose-300">{reservesError}</span> : null}
+        </label>
 
         <label className="flex items-center gap-2 rounded-xl border border-slate-500/35 bg-slate-900/70 px-3 py-2">
           <span className="text-sm text-slate-300">Focus account</span>

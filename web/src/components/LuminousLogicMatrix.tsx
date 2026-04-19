@@ -186,8 +186,8 @@ export function LuminousLogicMatrix({
   const activeFlowNode = resolveActiveFlowNode(proverPhase, verifierPhase, zkPayload);
   const metrics = zkPayload?.metrics ?? [];
   const stageCards = zkPayload?.stages ?? [];
+  const proofLinkStatus = zkPayload?.couplingStatus ?? "missing";
 
-  const successTone = "text-emerald-300";
   const dangerTone = "text-rose-400";
   const secondaryTone = "text-slate-400";
 
@@ -279,6 +279,28 @@ export function LuminousLogicMatrix({
         </div>
       ) : null}
 
+      <section className="border-b border-slate-700/60 px-4 py-3">
+        <div className="grid gap-2 md:grid-cols-3">
+          <div className="rounded-xl border border-cyan-800/50 bg-cyan-950/25 px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300">Proof A: Merkle proof</p>
+            <p className="mt-1 text-[10px] text-slate-300">Checks membership and tree integrity for committed balances.</p>
+          </div>
+          <div className="rounded-xl border border-amber-800/50 bg-amber-950/25 px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-300">Proof B: zk solvency proof</p>
+            <p className="mt-1 text-[10px] text-slate-300">Checks solvency constraints without revealing private balances.</p>
+          </div>
+          <div className="rounded-xl border border-slate-700/60 bg-slate-900/60 px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-200">Link condition</p>
+            <p className="mt-1 text-[10px] text-slate-300">
+              Root bridge status:{" "}
+              <span className={proofLinkStatus === "linked" ? "text-emerald-400" : "text-rose-400"}>
+                {proofLinkStatus === "linked" ? "linked" : proofLinkStatus}
+              </span>
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ── INTERACTIVE FLOW DIAGRAM ─────────────────────────────────── */}
       <section className="border-b border-slate-700/60 px-4 pt-5 pb-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -286,7 +308,7 @@ export function LuminousLogicMatrix({
             Live Flow
           </span>
           <p className={`text-[11px] ${secondaryTone}`}>
-            Highlighted node = active step. Click any node to inspect it below.
+            Highlighted node = active step. Merkle and zk are distinct proof tracks connected by the root-link condition.
           </p>
           <span className={`ml-auto rounded-md border border-slate-700/50 bg-slate-900/60 px-2 py-0.5 text-[10px] ${secondaryTone}`}>
             phase: <span className="text-slate-200">{proverPhase}</span>
@@ -296,7 +318,7 @@ export function LuminousLogicMatrix({
         <div className="grid gap-3 lg:grid-cols-[1.55fr_0.78fr_0.95fr]">
           <article className="rounded-xl border border-cyan-800/50 bg-cyan-950/20 p-3">
             <div className="rounded-lg border border-cyan-800/50 bg-cyan-950/35 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-400">
-              🔒 Prover Side
+              Prover Side
             </div>
             <div className="mt-3 space-y-2">
               {proverNodes.map((node, index) => (
@@ -310,7 +332,7 @@ export function LuminousLogicMatrix({
 
           <article className="rounded-xl border border-yellow-800/50 bg-yellow-950/20 p-3">
             <div className="rounded-lg border border-yellow-800/50 bg-yellow-950/35 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-yellow-400">
-              🔑 Setup / Keys
+              Setup / Keys
             </div>
             <div className="mt-3 space-y-2">
               {setupNodes.map((node, index) => (
@@ -329,7 +351,7 @@ export function LuminousLogicMatrix({
 
           <article className="rounded-xl border border-violet-800/50 bg-violet-950/20 p-3">
             <div className="rounded-lg border border-violet-800/50 bg-violet-950/35 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-violet-400">
-              ✓ Verifier Side
+              Verifier Side
             </div>
             <div className="mt-3 space-y-2">
               {verifierNodes.map((node, index) => (
@@ -350,9 +372,9 @@ export function LuminousLogicMatrix({
 
         {/* Legend */}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-600">
-          <span>🔒 Private data stays on Prover side</span>
+          <span>Private data stays on Prover side</span>
           <span>•</span>
-          <span>📤 Only <span className="text-slate-400">proof + publicSignals</span> cross to Verifier</span>
+          <span>Only <span className="text-slate-400">proof + publicSignals</span> cross to Verifier</span>
           <span>•</span>
           <span className="text-emerald-700">■ circuit computation</span>
           <span className="text-amber-700">■ zk-proof ops</span>
@@ -365,15 +387,15 @@ export function LuminousLogicMatrix({
         {/* Tab bar */}
         <div className="grid grid-cols-2 gap-1.5 mb-4 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-9">
           {([
-            { key: "inputs",   label: "📥 Inputs"         },
-            { key: "circuit",  label: "⚙️ Circuit"        },
-            { key: "witness",  label: "👁 Witness"         },
-            { key: "keys",     label: "🔑 Keys"            },
-            { key: "proof",    label: "🔐 Proof Gen"       },
-            { key: "public",   label: "📤 Public Signals"  },
-            { key: "verify",   label: "✓ Verifier"         },
-            { key: "result",   label: "🏁 Result"          },
-            { key: "attacker", label: "⚠️ Attacker"       },
+            { key: "inputs",   label: "Merkle + Witness Inputs" },
+            { key: "circuit",  label: "Circuit"                 },
+            { key: "witness",  label: "ZK Witness"              },
+            { key: "keys",     label: "Keys"                    },
+            { key: "proof",    label: "ZK Proof Gen"            },
+            { key: "public",   label: "Linking Signals"         },
+            { key: "verify",   label: "ZK Verifier"             },
+            { key: "result",   label: "Dual Result"             },
+            { key: "attacker", label: "ZK Attacker"             },
           ] as { key: PanelKey; label: string }[]).map(({ key, label }) => (
             <button
               key={key}
@@ -395,10 +417,10 @@ export function LuminousLogicMatrix({
           {/* ── INPUTS ── */}
           {selectedPanel === "inputs" && (
             <motion.div key="inputs" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
-              <h3 className="text-[13px] font-semibold text-slate-100 mb-3">Input Stream — What enters the prover</h3>
+              <h3 className="text-[13px] font-semibold text-slate-100 mb-3">Input Domains — Merkle data and zk witness data</h3>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-slate-700/50 bg-slate-900/60 p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-rose-400 mb-3">🔒 Private Inputs (witness)</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-rose-400 mb-3">Private witness inputs (zk proof)</p>
                   <div className="space-y-2">
                     <div className="rounded-lg border border-slate-700/50 bg-slate-950/70 px-3 py-2">
                       <p className="text-[10px] text-slate-500">Account ID</p>
@@ -416,7 +438,7 @@ export function LuminousLogicMatrix({
                   <p className="mt-2 text-[10px] text-slate-600">These are passed into Circom WASM as witness signals. They never leave the prover.</p>
                 </div>
                 <div className="rounded-xl border border-slate-700/50 bg-slate-900/60 p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-400 mb-3">📤 Public Inputs (transparent)</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-400 mb-3">Linking public signals (Merkle to zk)</p>
                   <div className="space-y-2">
                     <div className="rounded-lg border border-cyan-900/50 bg-cyan-950/30 px-3 py-2">
                       <p className="text-[10px] text-slate-500">Merkle Root</p>
@@ -427,7 +449,7 @@ export function LuminousLogicMatrix({
                       <p className="mt-0.5 text-[12px] font-semibold text-cyan-200">{zkPayload?.metadata.reserves ?? "—"}</p>
                     </div>
                   </div>
-                  <p className="mt-2 text-[10px] text-slate-600">Only these two values exit as publicSignals. Total liabilities stay hidden.</p>
+                  <p className="mt-2 text-[10px] text-slate-600">These public signals bridge two independent proofs. Total liabilities stay hidden.</p>
                 </div>
               </div>
               <div className="mt-3 rounded-xl border border-slate-700/40 bg-slate-900/50 px-4 py-3 text-[11px] text-slate-400">
@@ -593,14 +615,28 @@ template Solvency(N) {
                   {proverPhase === "inflow" ? "⬇ IN" : proverPhase === "proving" ? "PROVE" : proverPhase === "emission" ? "⬆ OUT" : "PLONK"}
                 </motion.div>
                 <AnimatePresence>
+                  {(proverPhase === "inflow" || proverPhase === "proving") && [0, 1, 2].map((lane) => (
+                    <motion.span
+                      key={`inflow-${lane}`}
+                      className="absolute top-4 rounded-full border border-cyan-300/60 bg-cyan-500/15 px-2 py-0.5 text-[9px] uppercase tracking-widest text-cyan-100"
+                      style={{ left: "8%" }}
+                      initial={{ left: "8%", y: lane * 30, opacity: 0, scale: 0.8 }}
+                      animate={{ left: "42%", y: lane * 30, opacity: [0, 1, 0.85], scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.55, delay: lane * 0.08, ease: "easeOut" }}
+                    >
+                      {`w_${lane + 1}`}
+                    </motion.span>
+                  ))}
                   {(proverPhase === "emission" || proverPhase === "settled") && piPackets.map((packet, i) => (
                     <motion.span
                       key={`${packet.piLabel}-${i}`}
-                      className="absolute left-8 top-4 rounded-full border border-lime-300/60 bg-lime-500/15 px-2 py-0.5 text-[9px] uppercase tracking-widest text-lime-100"
-                      initial={{ x: 0, y: i * 30, opacity: 0, scale: 0.8 }}
-                      animate={{ x: 220, y: i * 30, opacity: [0, 1, 0.8], scale: 1 }}
+                      className="absolute top-4 rounded-full border border-lime-300/60 bg-lime-500/15 px-2 py-0.5 text-[9px] uppercase tracking-widest text-lime-100"
+                      style={{ left: "42%" }}
+                      initial={{ left: "42%", y: i * 30, opacity: 0, scale: 0.8 }}
+                      animate={{ left: "78%", y: i * 30, opacity: [0, 1, 0.85], scale: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 0.7, delay: i * 0.1, ease: "easeOut" }}
+                      transition={{ duration: 0.65, delay: i * 0.1, ease: "easeOut" }}
                     >
                       {packet.piLabel}
                     </motion.span>
@@ -610,7 +646,7 @@ template Solvency(N) {
                   {proverPhase === "inflow" ? "Encoding witness into polynomial commitments..."
                     : proverPhase === "proving" ? "Running PLONK constraint satisfaction..."
                     : proverPhase === "emission" ? "Emitting proof: pi_a, pi_b, pi_c + publicSignals"
-                    : proverPhase === "settled" ? "✓ Proof sealed and ready for transfer"
+                    : proverPhase === "settled" ? "Proof sealed and ready for transfer"
                     : "Awaiting witness input"}
                 </div>
               </div>
@@ -634,13 +670,13 @@ template Solvency(N) {
           {/* ── PUBLIC SIGNALS ── */}
           {selectedPanel === "public" && (
             <motion.div key="public" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
-              <h3 className="text-[13px] font-semibold text-slate-100 mb-1">Public Signals — What the world can see</h3>
-              <p className="text-[11px] text-slate-400 mb-4">The only outputs that cross the prover→verifier boundary. Everything else stays private.</p>
+              <h3 className="text-[13px] font-semibold text-slate-100 mb-1">Linking Signals — Bridge between Merkle proof and zk proof</h3>
+              <p className="text-[11px] text-slate-400 mb-4">These values are public and bind the two proofs to the same committed dataset.</p>
               <div className="grid gap-3 sm:grid-cols-2 mb-4">
                 <div className="rounded-xl border border-cyan-800/50 bg-cyan-950/25 p-4">
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300 mb-2">reservesPublic</p>
                   <p className="font-mono text-[15px] font-semibold text-cyan-100">{zkPayload?.metadata.reserves ?? "—"}</p>
-                  <p className="mt-2 text-[10px] text-slate-500">Exchange's verified reserve amount. Publicly auditable.</p>
+                  <p className="mt-2 text-[10px] text-slate-500">Exchange&apos;s verified reserve amount. Publicly auditable.</p>
                 </div>
                 <div className="rounded-xl border border-cyan-800/50 bg-cyan-950/25 p-4">
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300 mb-2">merkleRootPublic</p>
@@ -651,9 +687,9 @@ template Solvency(N) {
               <div className="rounded-xl border border-slate-700/40 bg-slate-900/50 p-4 mb-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-300 mb-2">What the verifier does NOT learn</p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-                  <span className="text-rose-400">❌ Individual balances</span>
-                  <span className="text-rose-400">❌ Total liabilities</span>
-                  <span className="text-rose-400">❌ User identities</span>
+                  <span className="text-rose-400">No individual balances</span>
+                  <span className="text-rose-400">No total liabilities</span>
+                  <span className="text-rose-400">No user identities</span>
                 </div>
                 <p className="mt-2 text-[10px] text-slate-500">PLONK achieves this via polynomial blinding — random masking added to witness polynomials before commitment.</p>
               </div>
@@ -673,7 +709,7 @@ template Solvency(N) {
                 disabled={!transferEnabled}
                 className="w-full rounded-xl border border-lime-600/50 bg-lime-500/10 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-lime-200 transition hover:bg-lime-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {transferEnabled ? "↻ Replay Proof Transfer Animation" : "⏳ Generating proof..."}
+                {transferEnabled ? "Replay Proof Transfer Animation" : "Generating proof..."}
               </button>
             </motion.div>
           )}
@@ -681,9 +717,9 @@ template Solvency(N) {
           {/* ── VERIFIER ── */}
           {selectedPanel === "verify" && (
             <motion.div key="verify" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
-              <h3 className="text-[13px] font-semibold text-slate-100 mb-1">Verifier — snarkjs.plonk.verify(vkey, publicSignals, proof)</h3>
+              <h3 className="text-[13px] font-semibold text-slate-100 mb-1">ZK Verifier — after Merkle-root link check</h3>
               <p className="text-[11px] text-slate-400 mb-4">
-                Checks BN254 bilinear pairing: <code className="text-slate-200 text-[10px]">e(A,B) == e(α,β)·e(pubCommit,γ)·e(C,δ)</code>
+                Sequence: (1) root-link consistency check, then (2) BN254 pairing check: <code className="text-slate-200 text-[10px]">e(A,B) == e(α,β)·e(pubCommit,γ)·e(C,δ)</code>
               </p>
               <div className="grid gap-3">
                 <div>
@@ -704,10 +740,10 @@ template Solvency(N) {
                     onClick={onVerifyProof}
                     className="flex-1 rounded-xl border border-violet-600/50 bg-violet-500/10 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-200 transition hover:bg-violet-500/20"
                   >
-                    ✓ Run Pairing Check
+                    Run Pairing Check
                   </button>
                   <div className={`rounded-lg border px-3 py-2 text-[11px] ${isProofTampered ? "border-rose-600/50 bg-rose-950/30 text-rose-300" : "border-slate-700/50 bg-slate-900/50 text-slate-500"}`}>
-                    {isProofTampered ? "⚠ tampered" : "intact"}
+                    {isProofTampered ? "tampered" : "intact"}
                   </div>
                 </div>
               </div>
@@ -731,7 +767,7 @@ template Solvency(N) {
                 transition={{ duration: 1.8, repeat: Infinity }}
               >
                 <p className={`text-3xl font-bold mb-2 ${verifierPhase === "passed" ? "text-emerald-300" : verifierPhase === "failed" ? "text-rose-400" : "text-slate-400"}`}>
-                  {verifierPhase === "passed" ? "✓ ACCEPTED" : verifierPhase === "failed" ? "✗ REJECTED" : verifierPhase === "checking" ? "⏳ CHECKING" : "PENDING"}
+                  {verifierPhase === "passed" ? "ACCEPTED" : verifierPhase === "failed" ? "REJECTED" : verifierPhase === "checking" ? "CHECKING" : "PENDING"}
                 </p>
                 <p className={`text-[12px] ${secondaryTone}`}>{zkVerificationResult}</p>
               </motion.div>
@@ -759,7 +795,7 @@ template Solvency(N) {
           {/* ── ATTACKER ── */}
           {selectedPanel === "attacker" && (
             <motion.div key="attacker" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
-              <h3 className="text-[13px] font-semibold text-slate-100 mb-1">Attacker's Area — Three sabotage attempts, all blocked</h3>
+              <h3 className="text-[13px] font-semibold text-slate-100 mb-1">Attacker&apos;s Area — Three sabotage attempts, all blocked</h3>
               <p className="text-[11px] text-slate-400 mb-4">Each attack targets a specific cryptographic guarantee. Try them to watch the circuit reject them.</p>
 
               <div className="grid gap-3 sm:grid-cols-3">
@@ -819,7 +855,7 @@ template Solvency(N) {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className={`mt-4 rounded-xl border px-4 py-3 text-[11px] ${sabotageMessage.startsWith("❌") ? "border-rose-600/50 bg-rose-950/30 text-rose-300" : "border-amber-700/50 bg-amber-950/30 text-amber-300"}`}
+                  className={`mt-4 rounded-xl border px-4 py-3 text-[11px] ${sabotageMessage.startsWith("FAIL:") ? "border-rose-600/50 bg-rose-950/30 text-rose-300" : "border-amber-700/50 bg-amber-950/30 text-amber-300"}`}
                 >
                   {sabotageMessage}
                 </motion.div>
@@ -860,7 +896,7 @@ template Solvency(N) {
         <span className="text-slate-600">Ceremony:</span>
         <span className="text-slate-300">Hermez PTAU</span>
         <span className="text-slate-700">•</span>
-        <span className="text-slate-600">Coupling:</span>
+        <span className="text-slate-600">Proof link:</span>
         <span className={zkPayload?.couplingStatus === "linked" ? "text-emerald-400" : "text-rose-400"}>
           {zkPayload?.couplingStatus ?? "—"}
         </span>
