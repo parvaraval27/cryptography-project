@@ -133,6 +133,23 @@ function buildResponse(payload: ZkVerifyResponse, status = 200) {
   return NextResponse.json(payload, { status });
 }
 
+function sanitizeVerifierErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return "Proof verification failed due to an unknown verifier error.";
+  }
+
+  const message = String(error.message ?? "").trim();
+  if (!message) {
+    return "Proof verification failed due to an unknown verifier error.";
+  }
+
+  if (message.includes("Cannot read properties") || message.includes("undefined")) {
+    return "Proof payload structure is invalid for pairing verification.";
+  }
+
+  return message;
+}
+
 export async function POST(req: Request) {
   const verifierLog: ZkVerifierLogPayload[] = [];
   const addLog = (label: string, passed: boolean) => {
@@ -275,11 +292,21 @@ export async function POST(req: Request) {
     }
     addLog("resolve verification key for circuit variant", true);
 
-    const valid = await verifyProof(
-      verificationPayload.proof,
-      verificationPayload.publicSignals,
-      vkeyPath,
-    );
+    let valid = false;
+    try {
+      valid = await verifyProof(
+        verificationPayload.proof,
+        verificationPayload.publicSignals,
+        vkeyPath,
+      );
+    } catch (pairingError) {
+      addLog("run BN254 PLONK pairing verification", false);
+      return fail(
+        "pairing-check-failed",
+        sanitizeVerifierErrorMessage(pairingError),
+        200,
+      );
+    }
 
     if (!valid) {
       addLog("run BN254 PLONK pairing verification", false);
@@ -295,7 +322,7 @@ export async function POST(req: Request) {
       verifierLog,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown verification error";
+    const message = sanitizeVerifierErrorMessage(error);
     if (verifierLog.length === 0) {
       addLog("decode verification request payload", false);
     }

@@ -187,6 +187,10 @@ export function LuminousLogicMatrix({
   const metrics = zkPayload?.metrics ?? [];
   const stageCards = zkPayload?.stages ?? [];
   const proofLinkStatus = zkPayload?.couplingStatus ?? "missing";
+  const rangeAttackValue = Number(rangeAttackBalance);
+  const insolvencyValue = Number(insolvencyReserves);
+  const isRangeAttackInputValid = Number.isFinite(rangeAttackValue) && Number.isInteger(rangeAttackValue) && rangeAttackValue < 0;
+  const isInsolvencyInputValid = Number.isFinite(insolvencyValue) && Number.isInteger(insolvencyValue) && insolvencyValue >= 0;
 
   const dangerTone = "text-rose-400";
   const secondaryTone = "text-slate-400";
@@ -263,6 +267,28 @@ export function LuminousLogicMatrix({
         ? "border-rose-500/50 bg-slate-950/90"
         : "border-slate-700/60 bg-slate-950/90";
 
+  function resolveTerminalLineClass(line: string) {
+    const normalized = line.toLowerCase();
+
+    if (normalized.includes("error") || normalized.includes("fail") || normalized.includes("rejected")) {
+      return "text-rose-400";
+    }
+
+    if (normalized.includes("warn")) {
+      return "text-amber-300";
+    }
+
+    if (normalized.includes("backend::") || normalized.includes("verifier::") || normalized.includes("checking")) {
+      return "text-cyan-300";
+    }
+
+    if (normalized.includes("pass") || normalized.includes("accepted") || normalized.includes("blocked")) {
+      return "text-emerald-300";
+    }
+
+    return "text-slate-300";
+  }
+
   const proverNodes = FLOW_NODES.filter((n) => n.zone === "prover");
   const setupNodes  = FLOW_NODES.filter((n) => n.zone === "setup");
   const verifierNodes = FLOW_NODES.filter((n) => n.zone === "verifier");
@@ -315,7 +341,7 @@ export function LuminousLogicMatrix({
     return { merkle, bridge, zk };
   }, [verifierTerminalLines, verifierPhase]);
 
-  function PipelineStep({ label, status, stepNum }: { label: string; status: string; stepNum: number }) {
+  function renderPipelineStep(label: string, status: string, stepNum: number) {
     let icon = <span className="text-[9px] font-bold text-slate-400">{stepNum}</span>;
     let textClass = "text-slate-500";
     let borderClass = "border-slate-700/40 bg-slate-900/30";
@@ -885,9 +911,9 @@ template Solvency(N) {
               <h3 className="text-[13px] font-semibold text-slate-100 mb-3">Verification Result</h3>
               
               <div className="grid gap-2 sm:grid-cols-3 mb-4">
-                <PipelineStep label="Merkle Check" status={pipelineStatus.merkle} stepNum={1} />
-                <PipelineStep label="Root Bridge" status={pipelineStatus.bridge} stepNum={2} />
-                <PipelineStep label="ZK Verify" status={pipelineStatus.zk} stepNum={3} />
+                {renderPipelineStep("Merkle Check", pipelineStatus.merkle, 1)}
+                {renderPipelineStep("Root Bridge", pipelineStatus.bridge, 2)}
+                {renderPipelineStep("ZK Verify", pipelineStatus.zk, 3)}
               </div>
 
               <motion.div
@@ -905,13 +931,13 @@ template Solvency(N) {
                 <p className={`text-[12px] ${secondaryTone}`}>{zkVerificationResult}</p>
               </motion.div>
               <div className={`rounded-xl border p-3 ${verifierToneClass}`}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-2">Verifier Terminal</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-2">Verifier Terminal (Backend Events)</p>
                 <div className="max-h-48 overflow-auto font-mono text-[10px] leading-5">
                   <AnimatePresence initial={false}>
                     {verifierTerminalLines.map((line, i) => (
                       <motion.p
                         key={`${line}-${i}`}
-                        className={verifierPhase === "failed" ? "text-rose-400" : "text-emerald-300"}
+                        className={resolveTerminalLineClass(line)}
                         initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: shouldReduceMotion ? 0 : 0.18 }}
@@ -945,7 +971,8 @@ template Solvency(N) {
                   <button
                     type="button"
                     onClick={() => onSabotageRangeCheck(Number(rangeAttackBalance))}
-                    className="mt-2 w-full rounded-lg border border-rose-800/50 bg-rose-950/30 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-rose-300 transition hover:bg-rose-900/40"
+                    disabled={!isRangeAttackInputValid}
+                    className="mt-2 w-full rounded-lg border border-rose-800/50 bg-rose-950/30 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-rose-300 transition hover:bg-rose-900/40 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Inject Negative Balance
                   </button>
@@ -964,7 +991,8 @@ template Solvency(N) {
                   <button
                     type="button"
                     onClick={() => onSabotageInsolvency(Number(insolvencyReserves))}
-                    className="mt-2 w-full rounded-lg border border-rose-800/50 bg-rose-950/30 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-rose-300 transition hover:bg-rose-900/40"
+                    disabled={!isInsolvencyInputValid}
+                    className="mt-2 w-full rounded-lg border border-rose-800/50 bg-rose-950/30 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-rose-300 transition hover:bg-rose-900/40 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Force Insolvency
                   </button>
@@ -995,13 +1023,13 @@ template Solvency(N) {
               )}
 
               <div className={`mt-4 rounded-xl border p-3 ${verifierToneClass}`}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-2">Verifier Terminal</p>
-                <div className="max-h-36 overflow-auto font-mono text-[10px] leading-5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-2">Verifier Terminal (Backend Events)</p>
+                <div className="max-h-48 overflow-auto font-mono text-[10px] leading-5">
                   <AnimatePresence initial={false}>
                     {verifierTerminalLines.map((line, i) => (
                       <motion.p
                         key={`${line}-${i}`}
-                        className={verifierPhase === "failed" ? "text-rose-400" : "text-emerald-300"}
+                        className={resolveTerminalLineClass(line)}
                         initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: shouldReduceMotion ? 0 : 0.18 }}
