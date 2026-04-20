@@ -165,11 +165,19 @@ function formatVerifierTerminalLine(line: ZkVerifierLogPayload) {
   }
 
   if (line.step === 2) {
-    return `Step 2: verifier:: checking Merkle-root link (proof signal ↔ public root)... [${passLabel}]`;
+    return `Step 2: verifier:: validating required fields (payload, root, address)... [${passLabel}]`;
   }
 
   if (line.step === 3) {
-    return `Step 3: verifier:: verifying zk pairing equation (BN254)... [${passLabel}]`;
+    return `Step 3: verifier:: validating address exists in current snapshot... [${passLabel}]`;
+  }
+
+  if (line.step === 5) {
+    return `Step 5: verifier:: checking Merkle root-link consistency (request root ↔ payload root)... [${passLabel}]`;
+  }
+
+  if (line.step === 8) {
+    return `Step 8: verifier:: verifying zk pairing equation (BN254)... [${passLabel}]`;
   }
 
   return `Step ${line.step}: verifier:: ${line.label} [${passLabel}]`;
@@ -538,11 +546,30 @@ export default function Home() {
     }
 
     try {
+      const knownAccounts = rows
+        .map((row) => ({
+          accountId: row.accountId.trim(),
+          balance: String(row.balance ?? "").trim(),
+        }))
+        .filter((row) => row.accountId);
+
+      const selectedAccount = knownAccounts.find((row) => row.accountId === verifyAddress);
+      const currentProof = payload?.proof;
+
       const verifyRequest: ZkVerifyRequest = {
         verificationPayload,
         verifyRoot,
         verifyAddress,
-        knownAccountIds: rows.map((row) => row.accountId.trim()).filter(Boolean),
+        knownAccounts,
+        merkleProof: currentProof
+          ? {
+              userId: currentProof.userId,
+              userBalance: selectedAccount?.balance ?? "",
+              rootHash: currentProof.rootHash,
+              rootSum: currentProof.rootSum,
+              proof: currentProof.proof,
+            }
+          : null,
       };
 
       const response = await fetch("/api/zk/verify", {
@@ -785,16 +812,16 @@ export default function Home() {
       },
       {
         id: "proof",
-        label: "03",
-        title: "Merkle proof + zk proof",
-        description: "Two separate proofs are generated: Merkle membership/integrity proof and zk solvency proof.",
+        label: "03A",
+        title: "Merkle Inclusion Proof",
+        description: "SHA-256 Merkle Sum Tree proves a user's balance is included in the committed root. O(log n) path.",
         href: "#step-proof",
       },
       {
         id: "verify",
-        label: "04",
-        title: "Dual verification & attacks",
-        description: "Verifier checks Merkle-root link first, then BN254 pairing. Attack tests validate both defenses.",
+        label: "03B",
+        title: "zk-SNARK Solvency Proof",
+        description: "PLONK over BN254 proves reserves ≥ liabilities without revealing any private balance or total sum.",
         href: "#step-proof",
       },
     ],
@@ -833,7 +860,6 @@ export default function Home() {
         <div className="step-heading">
           <span className="step-index">STEP 1</span>
           <h2 className="step-title">Input Merkle Data</h2>
-          <p className="ml-auto text-xs text-slate-400">Start here and keep the flow linear.</p>
         </div>
 
         <UserInputTable
@@ -893,10 +919,8 @@ export default function Home() {
       <section id="step-proof" className="step-shell border-lime-400/30 scroll-mt-6">
         <div className="step-heading">
           <span className="step-index">STEP 3</span>
-          <h2 className="step-title">Proof Flows: Merkle and zk-SNARK</h2>
-          <p className="ml-auto text-xs text-slate-400">
-            Click nodes in the flow diagram to inspect each stage — inputs, circuit, witness, keys, proof generation, public signals, verifier, and attacker tests.
-          </p>
+          <h2 className="step-title">Proof System: Merkle and zk-SNARK</h2>
+            
         </div>
 
         {merkleCompleted ? (

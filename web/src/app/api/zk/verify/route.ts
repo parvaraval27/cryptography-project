@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { verifyProof } from "merkle_tree/src/zkProof.js";
-import type { ZkVerifyRequest, ZkVerifyResponse } from "@/lib/contracts";
+import type { ZkVerifierLogPayload, ZkVerifyRequest, ZkVerifyResponse } from "@/lib/contracts";
 
 export const runtime = "nodejs";
 
@@ -48,53 +49,188 @@ function resolveVerificationKeyPath(workspaceRoot: string, circuitVariant: numbe
   return "";
 }
 
+function normalizeHexHash(value: string) {
+  return String(value ?? "").trim().toLowerCase().replace(/^0x/, "");
+}
+
+function hashLeaf(accountId: string, balance: string) {
+  return createHash("sha256").update(`${accountId}:${balance}`).digest("hex");
+}
+
+function hashNode(leftHash: string, rightHash: string) {
+  return createHash("sha256").update(leftHash + rightHash).digest("hex");
+}
+
+function verifyMerkleInclusion(
+  accountId: string,
+  balance: string,
+  proof: Array<{ hash: string; position: "left" | "right" | "self"; siblingSum?: string }>,
+  expectedRootHash: string,
+  expectedRootSum?: string,
+) {
+  let currentHash = hashLeaf(accountId, balance);
+  let currentSum = BigInt(balance);
+  const strictMode = expectedRootSum !== undefined && expectedRootSum !== null && expectedRootSum !== "";
+
+  for (const proofNode of proof) {
+    const siblingHash = normalizeHexHash(proofNode.hash);
+    if (!siblingHash) {
+      return false;
+    }
+
+    if (proofNode.position === "right") {
+      currentHash = hashNode(currentHash, siblingHash);
+      if (strictMode) {
+        if (proofNode.siblingSum === undefined) {
+          return false;
+        }
+        currentSum += BigInt(proofNode.siblingSum);
+      }
+      continue;
+    }
+
+    if (proofNode.position === "left") {
+      currentHash = hashNode(siblingHash, currentHash);
+      if (strictMode) {
+        if (proofNode.siblingSum === undefined) {
+          return false;
+        }
+        currentSum += BigInt(proofNode.siblingSum);
+      }
+      continue;
+    }
+
+    if (proofNode.position === "self") {
+      currentHash = hashNode(currentHash, currentHash);
+      if (strictMode) {
+        if (proofNode.siblingSum === undefined) {
+          return false;
+        }
+
+        const siblingSum = BigInt(proofNode.siblingSum);
+        if (siblingSum !== currentSum) {
+          return false;
+        }
+      }
+      continue;
+    }
+
+    return false;
+  }
+
+  if (normalizeHexHash(currentHash) !== normalizeHexHash(expectedRootHash)) {
+    return false;
+  }
+
+  if (!strictMode) {
+    return true;
+  }
+
+  return currentSum === BigInt(expectedRootSum);
+}
+
 function buildResponse(payload: ZkVerifyResponse, status = 200) {
   return NextResponse.json(payload, { status });
 }
 
 export async function POST(req: Request) {
+  const verifierLog: ZkVerifierLogPayload[] = [];
+  const addLog = (label: string, passed: boolean) => {
+    verifierLog.push({
+      step: verifierLog.length + 1,
+      label,
+      passed,
+    });
+  };
+
+  const fail = (
+    verificationReasonCode: ZkVerifyResponse["verificationReasonCode"],
+    message: string,
+    status = 400,
+  ) =>
+    buildResponse(
+      {
+        isValid: false,
+        verifierPhase: "failed",
+        verificationReasonCode,
+        message,
+        verifierLog,
+      },
+      status,
+    );
+
   try {
     const body = (await req.json()) as Partial<ZkVerifyRequest>;
     const verificationPayload = body?.verificationPayload;
+    const merkleProof = body?.merkleProof ?? null;
     const verifyRootRaw = String(body?.verifyRoot ?? "").trim();
     const verifyAddress = String(body?.verifyAddress ?? "").trim();
-    const knownAccountIds = Array.isArray(body?.knownAccountIds)
-      ? body!.knownAccountIds.map((id) => String(id).trim()).filter(Boolean)
+    const knownAccounts = Array.isArray(body?.knownAccounts)
+      ? body.knownAccounts
+          .map((entry) => ({
+            accountId: String(entry?.accountId ?? "").trim(),
+            balance: String(entry?.balance ?? "").trim(),
+          }))
+          .filter((entry) => entry.accountId)
       : [];
 
-    if (!verificationPayload || !verifyRootRaw || !verifyAddress) {
-      return buildResponse(
-        {
-          isValid: false,
-          verifierPhase: "failed",
-          verificationReasonCode: "missing-verification-input",
-          message: "Verification payload, root, or address is missing.",
-          verifierLog: [
-            { step: 1, label: "verification payload received", passed: false },
-            { step: 2, label: "public root and address checks", passed: false },
-            { step: 3, label: "pairing equation", passed: false },
-          ],
-        },
-        400,
-      );
-    }
+    addLog("decode verification request payload", true);
 
-    if (!knownAccountIds.includes(verifyAddress)) {
-      return buildResponse(
-        {
-          isValid: false,
-          verifierPhase: "failed",
-          verificationReasonCode: "unknown-address",
-          message: "Address is not part of the active snapshot.",
-          verifierLog: [
-            { step: 1, label: "verification payload received", passed: true },
-            { step: 2, label: "public root and address checks", passed: false },
-            { step: 3, label: "pairing equation", passed: false },
-          ],
-        },
-        400,
-      );
+    if (!verificationPayload || !verifyRootRaw || !verifyAddress) {
+      addLog("validate required inputs (payload, root, address)", false);
+      return fail("missing-verification-input", "Verification payload, root, or address is missing.", 400);
     }
+    addLog("validate required inputs (payload, root, address)", true);
+
+    const selectedAccount = knownAccounts.find((entry) => entry.accountId === verifyAddress);
+    if (!selectedAccount) {
+      addLog("validate address exists in active snapshot", false);
+      return fail("unknown-address", "Address is not part of the active snapshot.", 400);
+    }
+    addLog("validate address exists in active snapshot", true);
+
+    if (!/^\d+$/.test(selectedAccount.balance)) {
+      addLog("resolve non-negative balance for Merkle leaf verification", false);
+      return fail("unknown-account-balance", "Account balance is missing for Merkle verification.", 400);
+    }
+    addLog("resolve non-negative balance for Merkle leaf verification", true);
+
+    if (!merkleProof) {
+      addLog("load Merkle inclusion proof payload", false);
+      return fail("missing-merkle-proof", "Merkle proof payload is missing.", 400);
+    }
+    addLog("load Merkle inclusion proof payload", true);
+
+    if (String(merkleProof.userId ?? "").trim() !== verifyAddress) {
+      addLog("validate Merkle proof user matches verifier address", false);
+      return fail("merkle-proof-user-mismatch", "Merkle proof user does not match selected address.", 400);
+    }
+    addLog("validate Merkle proof user matches verifier address", true);
+
+    if (normalizeHexHash(String(merkleProof.rootHash ?? "")) !== normalizeHexHash(verifyRootRaw)) {
+      addLog("validate Merkle proof root matches verifier root", false);
+      return fail("merkle-proof-root-mismatch", "Merkle proof root does not match verifier root.", 400);
+    }
+    addLog("validate Merkle proof root matches verifier root", true);
+
+    if (!Array.isArray(merkleProof.proof) || merkleProof.proof.length === 0) {
+      addLog("validate Merkle path nodes are present", false);
+      return fail("missing-merkle-proof", "Merkle path is missing from proof payload.", 400);
+    }
+    addLog("validate Merkle path nodes are present", true);
+
+    const merkleValid = verifyMerkleInclusion(
+      verifyAddress,
+      selectedAccount.balance,
+      merkleProof.proof,
+      verifyRootRaw,
+      merkleProof.rootSum,
+    );
+    if (!merkleValid) {
+      addLog("run full Merkle inclusion verification (hash path + sum checks)", false);
+      return fail("merkle-proof-invalid", "Merkle inclusion proof validation failed.", 400);
+    }
+    addLog("run full Merkle inclusion verification (hash path + sum checks)", true);
 
     if (
       !Array.isArray(verificationPayload.publicSignals) ||
@@ -102,97 +238,42 @@ export async function POST(req: Request) {
       verificationPayload.publicSignals.length === 0 ||
       !verificationPayload.proof
     ) {
-      return buildResponse(
-        {
-          isValid: false,
-          verifierPhase: "failed",
-          verificationReasonCode: "malformed-proof-payload",
-          message: "Proof payload is malformed.",
-          verifierLog: [
-            { step: 1, label: "verification payload shape", passed: false },
-            { step: 2, label: "public root checks", passed: false },
-            { step: 3, label: "pairing equation", passed: false },
-          ],
-        },
-        400,
-      );
+      addLog("validate proof payload shape (proof + public signals)", false);
+      return fail("malformed-proof-payload", "Proof payload is malformed.", 400);
     }
+    addLog("validate proof payload shape (proof + public signals)", true);
 
     const normalizedInputRoot = toFieldElementDecimal(normalizeMerkleRoot(verifyRootRaw));
     const normalizedPayloadRoot = toFieldElementDecimal(normalizeMerkleRoot(String(verificationPayload.merkleRootPublic ?? "")));
 
     if (!normalizedPayloadRoot || normalizedInputRoot !== normalizedPayloadRoot) {
-      return buildResponse(
-        {
-          isValid: false,
-          verifierPhase: "failed",
-          verificationReasonCode: "public-root-mismatch",
-          message: "Input root does not match proof payload root.",
-          verifierLog: [
-            { step: 1, label: "verification payload received", passed: true },
-            { step: 2, label: "public root and address checks", passed: false },
-            { step: 3, label: "pairing equation", passed: false },
-          ],
-        },
-        400,
-      );
+      addLog("check Merkle root-link consistency (request root vs payload root)", false);
+      return fail("public-root-mismatch", "Input root does not match proof payload root.", 400);
     }
+    addLog("check Merkle root-link consistency (request root vs payload root)", true);
 
     const merkleSignalIndex = verificationPayload.publicSignalLabels.findIndex((label) => label === "merkleRootPublic");
     if (merkleSignalIndex < 0) {
-      return buildResponse(
-        {
-          isValid: false,
-          verifierPhase: "failed",
-          verificationReasonCode: "malformed-proof-payload",
-          message: "merkleRootPublic label is missing in public signals.",
-          verifierLog: [
-            { step: 1, label: "verification payload shape", passed: false },
-            { step: 2, label: "public root and address checks", passed: false },
-            { step: 3, label: "pairing equation", passed: false },
-          ],
-        },
-        400,
-      );
+      addLog("locate merkleRootPublic label in public signals", false);
+      return fail("malformed-proof-payload", "merkleRootPublic label is missing in public signals.", 400);
     }
+    addLog("locate merkleRootPublic label in public signals", true);
 
     const merkleSignalValue = String(verificationPayload.publicSignals[merkleSignalIndex] ?? "").trim();
     if (!merkleSignalValue || merkleSignalValue !== normalizedPayloadRoot) {
-      return buildResponse(
-        {
-          isValid: false,
-          verifierPhase: "failed",
-          verificationReasonCode: "signal-root-mismatch",
-          message: "Public signal root does not match proof payload root.",
-          verifierLog: [
-            { step: 1, label: "verification payload received", passed: true },
-            { step: 2, label: "public root and address checks", passed: false },
-            { step: 3, label: "pairing equation", passed: false },
-          ],
-        },
-        400,
-      );
+      addLog("compare merkleRootPublic signal value with payload root", false);
+      return fail("signal-root-mismatch", "Public signal root does not match proof payload root.", 400);
     }
+    addLog("compare merkleRootPublic signal value with payload root", true);
 
     const workspaceRoot = path.resolve(process.cwd(), "..");
     const vkeyPath = resolveVerificationKeyPath(workspaceRoot, Number(verificationPayload.circuitVariant ?? 0));
 
     if (!vkeyPath) {
-      return buildResponse(
-        {
-          isValid: false,
-          verifierPhase: "failed",
-          verificationReasonCode: "missing-verification-key",
-          message: "Verification key is missing for the selected circuit variant.",
-          verifierLog: [
-            { step: 1, label: "verification payload received", passed: true },
-            { step: 2, label: "public root and address checks", passed: true },
-            { step: 3, label: "pairing equation", passed: false },
-          ],
-        },
-        500,
-      );
+      addLog("resolve verification key for circuit variant", false);
+      return fail("missing-verification-key", "Verification key is missing for the selected circuit variant.", 500);
     }
+    addLog("resolve verification key for circuit variant", true);
 
     const valid = await verifyProof(
       verificationPayload.proof,
@@ -201,46 +282,30 @@ export async function POST(req: Request) {
     );
 
     if (!valid) {
-      return buildResponse(
-        {
-          isValid: false,
-          verifierPhase: "failed",
-          verificationReasonCode: "pairing-check-failed",
-          message: "Pairing equation verification failed.",
-          verifierLog: [
-            { step: 1, label: "verification payload received", passed: true },
-            { step: 2, label: "public root and address checks", passed: true },
-            { step: 3, label: "pairing equation", passed: false },
-          ],
-        },
-        200,
-      );
+      addLog("run BN254 PLONK pairing verification", false);
+      return fail("pairing-check-failed", "Pairing equation verification failed.", 200);
     }
+    addLog("run BN254 PLONK pairing verification", true);
 
     return buildResponse({
       isValid: true,
       verifierPhase: "passed",
       verificationReasonCode: "ok",
       message: "Proof verified successfully.",
-      verifierLog: [
-        { step: 1, label: "verification payload received", passed: true },
-        { step: 2, label: "public root and address checks", passed: true },
-        { step: 3, label: "pairing equation", passed: true },
-      ],
+      verifierLog,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown verification error";
+    if (verifierLog.length === 0) {
+      addLog("decode verification request payload", false);
+    }
     return buildResponse(
       {
         isValid: false,
         verifierPhase: "failed",
         verificationReasonCode: "malformed-proof-payload",
         message,
-        verifierLog: [
-          { step: 1, label: "verification payload decode", passed: false },
-          { step: 2, label: "public root and address checks", passed: false },
-          { step: 3, label: "pairing equation", passed: false },
-        ],
+        verifierLog,
       },
       400,
     );

@@ -77,6 +77,9 @@ function normalizeUsers(rows: InputUserRow[]) {
     if (seen.has(accountId)) {
       throw new Error(`Duplicate accountId '${accountId}' is not allowed`);
     }
+    if (accountId.includes(':')) {
+    throw new Error(`accountId '${accountId}' must not contain colons`);
+    }
     seen.add(accountId);
 
     if (!Number.isFinite(numericBalance) || numericBalance < 0) {

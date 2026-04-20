@@ -140,7 +140,6 @@ export function UserInputTable({
             placeholder="Leave blank to auto-use total liabilities"
             className="rounded-md border border-slate-500/40 bg-slate-900 px-2 py-1 text-sm text-slate-100 outline-none focus:border-lime-300/60"
           />
-          <span className="text-xs text-slate-500">Optional. Must be a non-negative integer. Blank keeps the current auto-default behavior.</span>
           {reservesError ? <span className="text-xs text-rose-300">{reservesError}</span> : null}
         </label>
 
