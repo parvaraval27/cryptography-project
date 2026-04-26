@@ -697,18 +697,6 @@ export function LuminousLogicMatrix({
       </section>
 
       <section className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-[10px] text-slate-600">
-        <span>Proof system {zkPayload?.protocol ?? "PLONK"}</span>
-        <span>•</span>
-        <span>Curve {zkPayload?.curve ?? "BN254"}</span>
-        <span>•</span>
-        <span>Ceremony Hermez PTAU</span>
-        <span>•</span>
-        <span>
-          Proof link{" "}
-          <span className={zkPayload?.couplingStatus === "linked" ? "text-emerald-400" : "text-rose-400"}>
-            {zkPayload?.couplingStatus ?? "-"}
-          </span>
-        </span>
         <span className="ml-auto">
           {zkPayload ? `${zkPayload.metadata.usersProvided}/${zkPayload.metadata.maxUsers} slots used` : "awaiting proof"}
         </span>

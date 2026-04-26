@@ -719,21 +719,6 @@ body {
   animation: phantom-glyph-flow calc(1.1s / var(--user-tempo, 1)) steps(4, end) infinite;
 }
 
-.phantom-path-segment {
-  position: absolute;
-  height: 2px;
-  transform-origin: 0 50%;
-  border-radius: 9999px;
-  background: linear-gradient(
-    90deg,
-    hsl(var(--user-hue) 84% 60% / 0.12),
-    hsl(var(--user-hue) 84% 60% / 0.98),
-    hsl(calc(var(--user-hue) + 20deg) 82% 70% / 0.2)
-  );
-  box-shadow: 0 0 16px hsl(var(--user-hue) 84% 60% / 0.55);
-  animation: phantom-path-segment-flow calc(0.9s / var(--user-tempo, 1)) ease-in-out infinite;
-}
-
 .phantom-intake-shell {
   border-radius: 0.9rem;
   border: 1px solid rgba(100, 116, 139, 0.35);
@@ -1011,16 +996,6 @@ body {
   50% {
     filter: brightness(1.16);
     box-shadow: 0 0 0 1px hsl(var(--user-hue) 84% 60% / 0.42), 0 10px 30px hsl(var(--user-hue) 84% 60% / 0.3);
-  }
-}
-
-@keyframes phantom-path-segment-flow {
-  0%,
-  100% {
-    opacity: 0.58;
-  }
-  50% {
-    opacity: 1;
   }
 }
 

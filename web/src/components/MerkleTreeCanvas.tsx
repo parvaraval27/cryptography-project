@@ -52,30 +52,8 @@ type PacketTrack = {
   delayMs: number;
 };
 
-type BeamSegment = {
-  id: string;
-  x: number;
-  y: number;
-  length: number;
-  angleDeg: number;
-};
-
 function shortHash(hash: string) {
   return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
-}
-
-function toBeamSegment(id: string, from: { x: number; y: number }, to: { x: number; y: number }): BeamSegment {
-  const deltaX = to.x - from.x;
-  const deltaY = to.y - from.y;
-  const length = Math.hypot(deltaX, deltaY);
-  const angleDeg = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
-  return {
-    id,
-    x: from.x,
-    y: from.y,
-    length,
-    angleDeg,
-  };
 }
 
 function AnimatedCountValue({ target, runKey }: Readonly<{ target: number; runKey: number }>) {
@@ -519,36 +497,6 @@ export function MerkleTreeCanvas({
       .filter((meta): meta is { id: string; x: number; y: number } => Boolean(meta));
   }, [activeLevel, snapshot.mergeMetadata, layout.positions, mergeTick]);
 
-  const pathBeamSegments = useMemo(() => {
-    if (visualMode !== "phantom" || pathRevealIndex <= 0) {
-      return [] as BeamSegment[];
-    }
-
-    const segments: BeamSegment[] = [];
-    const maxIndex = Math.min(pathRevealIndex, orderedPathNodeIds.length - 1);
-
-    for (let index = 1; index <= maxIndex; index += 1) {
-      const sourceNodeId = orderedPathNodeIds[index - 1];
-      const targetNodeId = orderedPathNodeIds[index];
-      const sourcePoint = layout.positions.get(sourceNodeId);
-      const targetPoint = layout.positions.get(targetNodeId);
-
-      if (!sourcePoint || !targetPoint) {
-        continue;
-      }
-
-      segments.push(
-        toBeamSegment(
-          `${sourceNodeId}-${targetNodeId}`,
-          { x: sourcePoint.x + 86, y: sourcePoint.y + 58 },
-          { x: targetPoint.x + 86, y: targetPoint.y + 58 },
-        ),
-      );
-    }
-
-    return segments;
-  }, [visualMode, pathRevealIndex, orderedPathNodeIds, layout.positions]);
-
   const flowData = useMemo(() => {
     const nodeLevelById = new Map<string, number>();
     for (const levelNodes of snapshot.levels) {
@@ -740,19 +688,6 @@ export function MerkleTreeCanvas({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_15%,rgba(16,185,129,0.20),transparent_42%),radial-gradient(circle_at_78%_18%,rgba(59,130,246,0.16),transparent_36%),radial-gradient(circle_at_50%_78%,rgba(14,165,233,0.18),transparent_44%)]" />
 
         <div className="pointer-events-none absolute inset-0 z-10">
-          {pathBeamSegments.map((segment) => (
-            <span
-              key={segment.id}
-              className="phantom-path-segment"
-              style={{
-                left: `${segment.x}px`,
-                top: `${segment.y}px`,
-                width: `${segment.length}px`,
-                transform: `rotate(${segment.angleDeg}deg)`,
-              }}
-            />
-          ))}
-
           {packetTracks.map((track) => (
             <span
               key={track.id}
