@@ -31,6 +31,7 @@ type NodeData = {
   hash: string;
   sum: string;
   userId?: string;
+  isCurrentLeaf: boolean;
   highlighted: boolean;
   isRoot: boolean;
   isBuilt: boolean;
@@ -131,6 +132,7 @@ function MerkleNodeCard({ data }: NodeProps<Node<NodeData>>) {
   const left = data.mergeMeta ? Number(data.mergeMeta.leftSum) : 0;
   const right = data.mergeMeta ? Number(data.mergeMeta.rightSum) : 0;
   const target = data.mergeMeta ? Number(data.mergeMeta.parentSum) : 0;
+  const showSumInPrivacy = !data.isPhantom || data.isCurrentLeaf;
 
   return (
     <div
@@ -161,7 +163,7 @@ function MerkleNodeCard({ data }: NodeProps<Node<NodeData>>) {
       {showNodeContent ? (
         <>
           <p className="font-semibold tracking-wide text-slate-100">{shortHash(data.hash)}</p>
-          <p className="mt-1 text-slate-300">sum: {data.sum}</p>
+          {showSumInPrivacy ? <p className="mt-1 text-slate-300">sum: {data.sum}</p> : null}
           <p className="text-slate-400">lvl {data.level} idx {data.index}</p>
           {data.userId ? <p className="text-lime-300">user: {data.userId}</p> : null}
         </>
@@ -173,7 +175,7 @@ function MerkleNodeCard({ data }: NodeProps<Node<NodeData>>) {
         </>
       )}
 
-      {data.mergeMeta && data.isBuilt && data.isActiveLevel && showNodeContent ? (
+      {data.mergeMeta && data.isBuilt && data.isActiveLevel && showNodeContent && !data.isPhantom ? (
         <div className="mt-2 rounded-md border border-emerald-300/35 bg-emerald-500/10 px-2 py-1 text-[10px] atlas-merge-reveal">
           <p className="text-emerald-100">
             {left.toLocaleString()} + {right.toLocaleString()} = <AnimatedCountValue target={target} runKey={data.mergeTick} />
@@ -253,7 +255,7 @@ export function MerkleTreeCanvas({
     return () => {
       timers.forEach((timer) => globalThis.clearTimeout(timer));
     };
-  }, [snapshot.root.hash, snapshot.levels.length]);
+  }, [buildPhase, snapshot.leafGenerationSequence, snapshot.root.hash, snapshot.levels.length]);
 
   useEffect(() => {
     if (!isAnimating) {
@@ -560,6 +562,7 @@ export function MerkleTreeCanvas({
         const point = layout.positions.get(node.nodeId) ?? { x: 0, y: 0 };
         const isRoot = node.nodeId === snapshot.root.nodeId;
         const isHighlighted = highlightedHashes.has(node.hash);
+        const isCurrentLeaf = String(node.userId ?? "") === proof.userId;
         const isPathNode = pathNodeIndexById.has(node.nodeId);
         const isPathRevealed =
           visualMode !== "phantom" ||
@@ -575,6 +578,7 @@ export function MerkleTreeCanvas({
             hash: node.hash,
             sum: node.sum,
             userId: node.userId,
+            isCurrentLeaf,
             highlighted: isHighlighted,
             isRoot,
             isBuilt,

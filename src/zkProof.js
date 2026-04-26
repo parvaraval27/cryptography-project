@@ -119,6 +119,14 @@ async function verifyProof(proof, publicSignals, verificationKeyPath) {
   return snarkjs.plonk.verify(verificationKey, publicSignals, proof);
 }
 
+function selectDeclaredPublicSignals(publicSignals) {
+  if (!Array.isArray(publicSignals) || publicSignals.length < 2) {
+    throw new Error("Invalid publicSignals: expected at least reservesPublic and merkleRootPublic");
+  }
+
+  return [String(publicSignals[0]), String(publicSignals[1])];
+}
+
 async function generateAndProve(balances, reserves, options = {}) {
   const {
     verify = true,
@@ -181,6 +189,7 @@ async function generateAndProve(balances, reserves, options = {}) {
 
     console.log("\n🧠 Step 1: Computing witness + generating PLONK proof...");
     const { proof, publicSignals } = await snarkjs.plonk.fullProve(input, wasmPath, zkeyPath);
+    const declaredPublicSignals = selectDeclaredPublicSignals(publicSignals);
     console.log("✅ Proof generated");
 
     const proofEnvelope = {
@@ -196,7 +205,7 @@ async function generateAndProve(balances, reserves, options = {}) {
         variant: circuitVariant,
       },
       proof,
-      publicSignals,
+      publicSignals: declaredPublicSignals,
       publicSignalLabels: ["reservesPublic", "merkleRootPublic"],
     };
 
@@ -211,11 +220,11 @@ async function generateAndProve(balances, reserves, options = {}) {
     let isValid = null;
     if (verify) {
       console.log("\n✔️ Step 2: Verifying proof against verification key...");
-      isValid = await verifyProof(proof, publicSignals, vkeyPath);
+      isValid = await verifyProof(proof, declaredPublicSignals, vkeyPath);
       console.log(isValid ? " Proof verification PASSED" : "Proof verification FAILED");
     }
 
-    return { proof, publicSignals, isValid, proofEnvelope };
+    return { proof, publicSignals: declaredPublicSignals, isValid, proofEnvelope };
   } catch (error) {
     console.error(" Error in proof generation:", error.message);
     throw error;
@@ -240,9 +249,10 @@ async function loadAndVerifyProof(proofPath) {
     const vkeyPath = circuitVariant
       ? path.join(proofDir, `Solvency_${circuitVariant}_vkey.json`)
       : path.join(proofDir, "verification_key.json");
+    const declaredPublicSignals = selectDeclaredPublicSignals(publicSignals);
     const envelopeMerkleRootRaw = String(proofData?.merkleRootPublic ?? proofData?.merkleRoot ?? "");
     const envelopeMerkleRoot = envelopeMerkleRootRaw ? toFieldElementDecimal(normalizeMerkleRoot(envelopeMerkleRootRaw)) : "";
-    const publicMerkleRoot = Array.isArray(publicSignals) && publicSignals.length >= 2 ? String(publicSignals[1]) : "";
+    const publicMerkleRoot = declaredPublicSignals[1] ?? "";
 
     console.log("\n Verifying saved Circom proof...");
     if (metadata && metadata.reserves) {
@@ -253,7 +263,7 @@ async function loadAndVerifyProof(proofPath) {
       throw new Error("Proof envelope merkle root does not match the public merkle root signal");
     }
 
-    const isValid = await verifyProof(proof, publicSignals, vkeyPath);
+    const isValid = await verifyProof(proof, declaredPublicSignals, vkeyPath);
     console.log(isValid ? " Proof is valid" : " Proof is invalid");
     return isValid;
   } catch (error) {

@@ -9,6 +9,7 @@ import type {
   SnapshotResponse,
   UserEntryRow,
   ZkProverEventPayload,
+  ZkVisualizationRequest,
   ZkVerificationPayload,
   ZkVerifyRequest,
   ZkVerifyResponse,
@@ -66,7 +67,7 @@ function validateRows(entries: UserEntryRow[]) {
   entries.forEach((row, index) => {
     const name = row.name.trim();
     const accountId = row.accountId.trim();
-    const balance = Number(row.balance);
+    const balance = String(row.balance ?? "").trim();
 
     if (!name) {
       errors.push(`Row ${index + 1}: name is required.`);
@@ -79,12 +80,42 @@ function validateRows(entries: UserEntryRow[]) {
     }
     seen.add(accountId);
 
-    if (!Number.isFinite(balance) || balance < 0) {
-      errors.push(`Row ${index + 1}: balance must be non-negative.`);
+    if (!/^\d+$/.test(balance)) {
+      errors.push(`Row ${index + 1}: balance must be a non-negative integer.`);
     }
   });
 
   return errors;
+}
+
+function calculateTotalLiabilities(entries: UserEntryRow[]) {
+  return entries.reduce((sum, row) => {
+    const balanceText = String(row.balance ?? "").trim();
+    if (!/^\d+$/.test(balanceText)) {
+      return sum;
+    }
+
+    return sum + BigInt(balanceText);
+  }, BigInt(0));
+}
+
+function validateReservesInput(reservesInput: string, totalLiabilities: bigint) {
+  const trimmed = reservesInput.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (!/^\d+$/.test(trimmed)) {
+    return "Reserves must be a non-negative integer or left blank.";
+  }
+
+  const reservesValue = BigInt(trimmed);
+  if (reservesValue < totalLiabilities) {
+    return `Reserves must be greater than or equal to total liabilities (${totalLiabilities.toString()}).`;
+  }
+
+  return null;
 }
 
 function selectEmissionPackets(zkPayload: ZkVisualizationPayload | null) {
@@ -128,19 +159,6 @@ function selectEmissionPackets(zkPayload: ZkVisualizationPayload | null) {
 
 function formatVerifierTerminalLine(line: ZkVerifierLogPayload) {
   const passLabel = line.passed ? "PASS" : "FAIL";
-
-  if (line.step === 1) {
-    return `Step 1: verifier:: receiving zk-SNARK receipt... [${passLabel}]`;
-  }
-
-  if (line.step === 2) {
-    return `Step 2: verifier:: checking if receipt matches the public Merkle Root... [${passLabel}]`;
-  }
-
-  if (line.step === 3) {
-    return `Step 3: verifier:: verifying mathematical signature (pairing check)... [${passLabel}]`;
-  }
-
   return `Step ${line.step}: verifier:: ${line.label} [${passLabel}]`;
 }
 
@@ -155,6 +173,23 @@ function queueVerifierTerminalLines(
       setVerifierTerminalLines((current) => [...current, terminalLine]);
     }, delayMs);
   }
+}
+
+function resolveBackendErrorMessage(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object") {
+    return fallback;
+  }
+
+  const responseBody = payload as { error?: unknown; message?: unknown };
+  if (typeof responseBody.error === "string" && responseBody.error.trim()) {
+    return responseBody.error;
+  }
+
+  if (typeof responseBody.message === "string" && responseBody.message.trim()) {
+    return responseBody.message;
+  }
+
+  return fallback;
 }
 
 function resolveWorkflowStageState(currentIndex: number, stageIndex: number): WorkflowStageState {
@@ -173,6 +208,8 @@ export default function Home() {
   const [rows, setRows] = useState<UserEntryRow[]>(() => buildSampleRows());
   const [selectedUserId, setSelectedUserId] = useState(sampleUsers[0]?.id ?? "");
   const [formError, setFormError] = useState<string | null>(null);
+  const [reservesInput, setReservesInput] = useState("");
+  const [reservesError, setReservesError] = useState<string | null>(null);
 
   const [payload, setPayload] = useState<SnapshotResponse | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
@@ -200,6 +237,11 @@ export default function Home() {
   const [treeVisualMode, setTreeVisualMode] = useState<TreeVisualMode>("phantom");
 
   const rowErrors = useMemo(() => validateRows(rows), [rows]);
+  const totalLiabilities = useMemo(() => calculateTotalLiabilities(rows), [rows]);
+  const currentReservesError = useMemo(
+    () => validateReservesInput(reservesInput, totalLiabilities),
+    [reservesInput, totalLiabilities],
+  );
   const activeVisualIdentity = selectedUserId || payload?.proof.userId || "observer";
   const visualProfile = useMemo(() => deriveUserVisualProfile(activeVisualIdentity), [activeVisualIdentity]);
 
@@ -208,16 +250,28 @@ export default function Home() {
     setZkError(null);
 
     try {
+      const reservesValidationError = validateReservesInput(reservesInput, totalLiabilities);
+      setReservesError(reservesValidationError);
+      if (reservesValidationError) {
+        throw new Error(reservesValidationError);
+      }
+
+      const visualizationRequest: ZkVisualizationRequest = {
+        users: rows.map((row) => ({
+          accountId: row.accountId,
+          balance: row.balance,
+        })),
+        merkleRoot: payload?.snapshot.root.hash ?? "0",
+      };
+
+      if (reservesInput.trim()) {
+        visualizationRequest.reserves = reservesInput.trim();
+      }
+
       const response = await fetch("/api/zk/visualization", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          users: rows.map((row) => ({
-            accountId: row.accountId,
-            balance: row.balance,
-          })),
-          merkleRoot: payload?.snapshot.root.hash ?? "0",
-        }),
+        body: JSON.stringify(visualizationRequest),
       });
       const body = (await response.json()) as ZkVisualizationPayload & { error?: string };
       if (!response.ok) {
@@ -238,11 +292,12 @@ export default function Home() {
     } finally {
       setZkLoading(false);
     }
-  }, [rows, payload]);
+  }, [rows, payload, reservesInput, totalLiabilities]);
 
   const loadSnapshot = useCallback(async (users: UserEntryRow[], focusUserId: string) => {
     setLoadingSnapshot(true);
     setFormError(null);
+    setReservesError(null);
     setMerkleCompleted(false);
     setZkPayload(null);
     setProverPhase("idle");
@@ -372,6 +427,8 @@ export default function Home() {
     setRows(next);
     setSelectedUserId(next[0]?.accountId ?? "");
     setFormError(null);
+    setReservesInput("");
+    setReservesError(null);
   }
 
   function handleGenerateMerkleTree() {
@@ -397,6 +454,11 @@ export default function Home() {
     ) {
       void loadSnapshot(rows, normalizedFocusUser);
     }
+  }
+
+  function handleReservesChange(nextValue: string) {
+    setReservesInput(nextValue);
+    setReservesError(validateReservesInput(nextValue, totalLiabilities));
   }
 
   const handleMerkleBuildComplete = useCallback(() => {
@@ -428,27 +490,147 @@ export default function Home() {
     setProofTampered(nextValue.trim() !== baselineProofInput.trim());
   }
 
-  function mutateHexValue(payloadText: string) {
-    const match = payloadText.match(/0x[a-fA-F0-9]{16,}|[a-fA-F0-9]{32,}/);
-    if (!match || match.index === undefined) {
+  function mutateNumericStringToken(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
       return null;
     }
 
-    const originalToken = match[0];
-    const hasPrefix = originalToken.startsWith("0x");
-    const hexBody = hasPrefix ? originalToken.slice(2) : originalToken;
-    const mutationIndex = Math.floor(Math.random() * hexBody.length);
-    const currentNibble = hexBody[mutationIndex].toLowerCase();
-    const replacementNibble = currentNibble === "f" ? "0" : "f";
-    const mutatedBody = `${hexBody.slice(0, mutationIndex)}${replacementNibble}${hexBody.slice(mutationIndex + 1)}`;
-    const mutatedToken = hasPrefix ? `0x${mutatedBody}` : mutatedBody;
-    const mutatedPayload = `${payloadText.slice(0, match.index)}${mutatedToken}${payloadText.slice(match.index + originalToken.length)}`;
+    if (/^0x[a-fA-F0-9]+$/.test(trimmed)) {
+      const body = trimmed.slice(2);
+      if (!body.length) {
+        return null;
+      }
+      const mutationIndex = Math.floor(Math.random() * body.length);
+      const currentNibble = body[mutationIndex].toLowerCase();
+      const replacementNibble = currentNibble === "f" ? "0" : "f";
+      const mutatedBody = `${body.slice(0, mutationIndex)}${replacementNibble}${body.slice(mutationIndex + 1)}`;
+      return {
+        originalToken: trimmed,
+        mutatedToken: `0x${mutatedBody}`,
+        mutationIndex,
+      };
+    }
+
+    if (/^\d+$/.test(trimmed)) {
+      const mutationIndex = Math.floor(Math.random() * trimmed.length);
+      const currentDigit = trimmed[mutationIndex];
+      const replacementDigit = currentDigit === "9" ? "0" : "9";
+      const mutatedToken = `${trimmed.slice(0, mutationIndex)}${replacementDigit}${trimmed.slice(mutationIndex + 1)}`;
+      return {
+        originalToken: trimmed,
+        mutatedToken,
+        mutationIndex,
+      };
+    }
+
+    return null;
+  }
+
+  function mutateVerificationPayload(
+    payloadText: string,
+  ): {
+    mutatedPayloadText: string;
+    mutatedPayloadObject: ZkVerificationPayload;
+    originalToken: string;
+    mutatedToken: string;
+    mutationIndex: number;
+    mutationPath: string;
+  } | null {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payloadText);
+    } catch {
+      return null;
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    const envelope = structuredClone(parsed) as {
+      proof?: unknown;
+    };
+
+    if (!envelope.proof || typeof envelope.proof !== "object") {
+      return null;
+    }
+
+    const proofRecord = envelope.proof as Record<string, unknown>;
+    const candidateKeys = ["A", "B", "C", "Z", "T1", "T2", "T3", "Wxi", "Wxiw"];
+
+    for (const key of candidateKeys) {
+      const slot = proofRecord[key];
+
+      if (Array.isArray(slot)) {
+        for (let index = 0; index < slot.length; index += 1) {
+          const entry = slot[index];
+          if (typeof entry !== "string") {
+            continue;
+          }
+          const mutation = mutateNumericStringToken(entry);
+          if (!mutation) {
+            continue;
+          }
+
+          slot[index] = mutation.mutatedToken;
+          return {
+            mutatedPayloadText: JSON.stringify(envelope, null, 2),
+            mutatedPayloadObject: envelope as ZkVerificationPayload,
+            originalToken: mutation.originalToken,
+            mutatedToken: mutation.mutatedToken,
+            mutationIndex: mutation.mutationIndex,
+            mutationPath: `proof.${key}[${index}]`,
+          };
+        }
+      }
+
+      if (typeof slot === "string") {
+        const mutation = mutateNumericStringToken(slot);
+        if (!mutation) {
+          continue;
+        }
+
+        proofRecord[key] = mutation.mutatedToken;
+        return {
+          mutatedPayloadText: JSON.stringify(envelope, null, 2),
+          mutatedPayloadObject: envelope as ZkVerificationPayload,
+          originalToken: mutation.originalToken,
+          mutatedToken: mutation.mutatedToken,
+          mutationIndex: mutation.mutationIndex,
+          mutationPath: `proof.${key}`,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function buildVerifyRequest(verificationPayload: ZkVerificationPayload): ZkVerifyRequest {
+    const knownAccounts = rows
+      .map((row) => ({
+        accountId: row.accountId.trim(),
+        balance: String(row.balance ?? "").trim(),
+      }))
+      .filter((row) => row.accountId);
+
+    const selectedAccount = knownAccounts.find((row) => row.accountId === verifyAddress);
+    const currentProof = payload?.proof;
 
     return {
-      mutatedPayload,
-      originalToken,
-      mutatedToken,
-      mutationIndex,
+      verificationPayload,
+      verifyRoot,
+      verifyAddress,
+      knownAccounts,
+      merkleProof: currentProof
+        ? {
+            userId: currentProof.userId,
+            userBalance: selectedAccount?.balance ?? "",
+            rootHash: currentProof.rootHash,
+            rootSum: currentProof.rootSum,
+            proof: currentProof.proof,
+          }
+        : null,
     };
   }
 
@@ -480,12 +662,7 @@ export default function Home() {
     }
 
     try {
-      const verifyRequest: ZkVerifyRequest = {
-        verificationPayload,
-        verifyRoot,
-        verifyAddress,
-        knownAccountIds: rows.map((row) => row.accountId.trim()).filter(Boolean),
-      };
+      const verifyRequest = buildVerifyRequest(verificationPayload);
 
       const response = await fetch("/api/zk/verify", {
         method: "POST",
@@ -509,7 +686,7 @@ export default function Home() {
         setVerifierTerminalLines((current) => [
           ...current,
           passed
-            ? "RESULT: Cryptographic verifier accepted the proof and public signals."
+            ? "RESULT: Merkle-root link check passed and zk pairing verifier accepted the proof."
             : `ERROR: ${verifyBody.message || "Verification failed"} (${verifyBody.verificationReasonCode || "unknown"})`,
         ]);
       }, verificationResultDelayMs);
@@ -525,25 +702,26 @@ export default function Home() {
 
   async function handleSabotageRangeCheck(balanceToInject: number) {
     if (!Number.isFinite(balanceToInject) || !Number.isInteger(balanceToInject)) {
-      setSabotageMessage("⚠️ Enter a valid integer balance for sabotage 1.");
+      setSabotageMessage("WARN: Enter a valid integer balance for sabotage 1.");
       return;
     }
 
     if (balanceToInject >= 0) {
-      setSabotageMessage("⚠️ Sabotage 1 expects a negative value (for example, -500).");
+      setSabotageMessage("WARN: Sabotage 1 expects a negative value (for example, -500).");
       return;
     }
 
     setSabotageMessage(null);
     setProverPhase("proving");
+    setVerifierPhase("checking");
+    setZkVerificationResult("Checking...");
     setVerifierTerminalLines([
       "attacker:: attempting sabotage 1: breaking range check",
       `attacker:: injecting balance: ${balanceToInject}`,
+      "backend:: sending candidate witness to /api/zk/visualization",
     ]);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      
       const maliciousRows = [
         { accountId: "attacker", balance: balanceToInject },
         ...rows,
@@ -560,61 +738,79 @@ export default function Home() {
           merkleRoot: payload?.snapshot.root.hash ?? "0",
         }),
       });
+      const responseBody = (await response.json().catch(() => null)) as unknown;
 
-      await response.json();
-      
       setProverPhase("idle");
-      setVerifierTerminalLines((current) => [
-        ...current,
-        "prover:: constraint evaluator active",
-        "⚠️  RangeCheck(64) assertion triggered",
-        "❌ PROVER HALT: Negative balance detected in range proof",
-        "The circuit mathematically blocks negative values in the range constraint.",
-      ]);
-      setSabotageMessage("❌ Sabotage Failed: Range check constraint prevents negative balances.");
+      setVerifierTerminalLines((current) => {
+        const backendStatusLine = `backend:: /api/zk/visualization responded with HTTP ${response.status}`;
+
+        if (response.ok) {
+          return [
+            ...current,
+            backendStatusLine,
+            "WARN: backend accepted negative-balance payload unexpectedly",
+            "verifier:: expected a range-constraint rejection from the proving pipeline",
+          ];
+        }
+
+        const backendReason = resolveBackendErrorMessage(
+          responseBody,
+          "Backend rejected unsafe negative balance input.",
+        );
+
+        return [
+          ...current,
+          backendStatusLine,
+          `backend:: rejection reason: ${backendReason}`,
+          "FAIL: sabotage blocked - RangeCheck(64) prevents negative balances",
+          "verifier:: backend rejection confirms range-constraint enforcement",
+        ];
+      });
+
+      if (response.ok) {
+        setVerifierPhase("failed");
+        setZkVerificationResult("Unexpected Acceptance");
+        setSabotageMessage("WARN: Backend accepted a negative balance payload. Review server-side validation.");
+      } else {
+        setVerifierPhase("passed");
+        setZkVerificationResult("Attack Blocked");
+        setSabotageMessage("FAIL: Sabotage failed: Backend rejected negative balances via range constraints.");
+      }
     } catch (error) {
       setProverPhase("idle");
+      setVerifierPhase("failed");
+      setZkVerificationResult("Verification Failed");
       setVerifierTerminalLines((current) => [
         ...current,
-        "prover:: constraint evaluator active",
-        "⚠️  RangeCheck(64) assertion triggered",
-        "❌ PROVER HALT: Negative balance cannot be encoded",
-        `error: ${error instanceof Error ? error.message : "Range constraint violation"}`,
+        "backend:: request to /api/zk/visualization failed before a verdict",
+        `ERROR: ${error instanceof Error ? error.message : "Range constraint validation failed"}`,
       ]);
-      setSabotageMessage("❌ Sabotage Failed: Cryptographic range proof blocks negative values.");
+      setSabotageMessage("FAIL: Sabotage failed: Cryptographic range proof blocks negative values.");
     }
   }
 
   async function handleSabotageInsolvency(forcedReserves: number) {
     if (!Number.isFinite(forcedReserves) || !Number.isInteger(forcedReserves) || forcedReserves < 0) {
-      setSabotageMessage("⚠️ Enter a valid non-negative integer for forced reserves.");
+      setSabotageMessage("WARN: Enter a valid non-negative integer for forced reserves.");
       return;
     }
 
     setSabotageMessage(null);
     setProverPhase("proving");
+    setVerifierPhase("checking");
+    setZkVerificationResult("Checking...");
     setVerifierTerminalLines([
       "attacker:: attempting sabotage 2: breaking solvency inequality",
       "attacker:: overriding public parameter: reserves",
       `attacker:: forced reserves value: ${forcedReserves}`,
+      "backend:: sending solvency challenge to /api/zk/visualization",
     ]);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      
-      const totalLiabilities = rows.reduce((sum, row) => sum + (Number(row.balance) || 0), 0);
+      const summedLiabilities = rows.reduce((sum, row) => sum + (Number(row.balance) || 0), 0);
       const maliciousReserves = forcedReserves;
 
-      if (maliciousReserves >= totalLiabilities) {
-        setProverPhase("idle");
-        setVerifierTerminalLines((current) => [
-          ...current,
-          `attacker:: liabilities = ${totalLiabilities}, forced reserves = ${maliciousReserves}`,
-          "info:: this input is not insolvent (reserves are not below liabilities)",
-        ]);
-        setSabotageMessage("⚠️ Choose forced reserves lower than total liabilities to trigger sabotage 2.");
-        return;
-      }
+      const isInsolventAttempt = maliciousReserves < summedLiabilities;
       
       const response = await fetch("/api/zk/visualization", {
         method: "POST",
@@ -628,35 +824,77 @@ export default function Home() {
           reserves: maliciousReserves.toString(),
         }),
       });
+      const responseBody = (await response.json().catch(() => null)) as unknown;
 
-      await response.json();
-      
       setProverPhase("idle");
-      setVerifierTerminalLines((current) => [
-        ...current,
-        "prover:: solvency constraint evaluator active",
-        "⚠️  SolvencyCheck(liabilities <= reserves) assertion triggered",
-        "❌ PROVER HALT: Solvency Inequality Failed",
-        `Total liabilities (${totalLiabilities}) exceed reserves (${maliciousReserves})`,
-        "The circuit rejects insolvent states mathematically.",
-      ]);
-      setSabotageMessage("❌ Sabotage Failed: Solvency constraint enforces liabilities ≤ reserves.");
+
+      setVerifierTerminalLines((current) => {
+        const backendStatusLine = `backend:: /api/zk/visualization responded with HTTP ${response.status}`;
+        const liabilitiesLine = `attacker:: liabilities=${summedLiabilities}, forcedReserves=${maliciousReserves}`;
+
+        if (!isInsolventAttempt) {
+          return [
+            ...current,
+            liabilitiesLine,
+            backendStatusLine,
+            response.ok
+              ? "INFO: backend accepted payload because reserves are not below liabilities"
+              : `WARN: backend rejected non-insolvent payload: ${resolveBackendErrorMessage(responseBody, "unexpected input rejection")}`,
+            "verifier:: to test sabotage 2, choose reserves lower than liabilities",
+          ];
+        }
+
+        if (response.ok) {
+          return [
+            ...current,
+            liabilitiesLine,
+            backendStatusLine,
+            "WARN: backend accepted an insolvent payload unexpectedly",
+            "verifier:: expected solvency-constraint rejection but proof generation succeeded",
+          ];
+        }
+
+        return [
+          ...current,
+          liabilitiesLine,
+          backendStatusLine,
+          `backend:: rejection reason: ${resolveBackendErrorMessage(responseBody, "insolvent witness rejected")}`,
+          "FAIL: sabotage blocked - liabilities cannot exceed reserves in the solvency circuit",
+        ];
+      });
+
+      if (!isInsolventAttempt) {
+        setVerifierPhase(response.ok ? "pending" : "failed");
+        setZkVerificationResult(response.ok ? "Not an Insolvency Attempt" : "Unexpected Rejection");
+        setSabotageMessage("WARN: Choose forced reserves lower than total liabilities to trigger sabotage 2.");
+        return;
+      }
+
+      if (response.ok) {
+        setVerifierPhase("failed");
+        setZkVerificationResult("Unexpected Acceptance");
+        setSabotageMessage("WARN: Backend accepted insolvent input. Review solvency validation path.");
+      } else {
+        setVerifierPhase("passed");
+        setZkVerificationResult("Attack Blocked");
+        setSabotageMessage("FAIL: Sabotage failed: Backend rejected insolvent witness input.");
+      }
     } catch (error) {
       setProverPhase("idle");
+      setVerifierPhase("failed");
+      setZkVerificationResult("Verification Failed");
       setVerifierTerminalLines((current) => [
         ...current,
-        "prover:: solvency constraint evaluator active",
-        "⚠️  SolvencyCheck(liabilities <= reserves) assertion triggered",
-        "❌ PROVER HALT: Cannot prove insolvent exchange",
-        `error: ${error instanceof Error ? error.message : "Solvency constraint violation"}`,
+        "backend:: request to /api/zk/visualization failed before a solvency verdict",
+        `ERROR: ${error instanceof Error ? error.message : "Solvency constraint validation failed"}`,
       ]);
-      setSabotageMessage("❌ Sabotage Failed: Cryptographic solvency proof blocks insolvency.");
+      setSabotageMessage("FAIL: Sabotage failed: Cryptographic solvency proof blocks insolvency.");
     }
   }
 
-  function handleSabotageMutateProof() {
+  async function handleSabotageMutateProof() {
     if (!zkPayload) {
-      setSabotageMessage("⚠️ No proof available to mutate yet. Generate a proof first.");
+      setSabotageMessage("WARN: No proof available to mutate yet. Generate a proof first.");
       return;
     }
 
@@ -666,43 +904,93 @@ export default function Home() {
     setVerifierTerminalLines([
       "attacker:: attempting sabotage 3: proof mutation",
       "attacker:: mutating one nibble in a proof hash value",
+      "backend:: preparing immediate verification request",
     ]);
 
     const proofJson = verifyProofInput || baselineProofInput;
-    const mutationResult = mutateHexValue(proofJson);
+    const mutationResult = mutateVerificationPayload(proofJson);
 
     if (!mutationResult) {
       setVerifierPhase("failed");
       setZkVerificationResult("Mutation Failed");
-      setSabotageMessage("⚠️ Could not find a hash value to mutate in the proof payload.");
+      setSabotageMessage("WARN: Could not find a hash value to mutate in the proof payload.");
       setVerifierTerminalLines((current) => [
         ...current,
-        "error:: no hex/hash token found for mutation",
+        "ERROR: no mutable proof field found (expected proof.A/B/C/Z/T* values)",
       ]);
       return;
     }
-    const { mutatedPayload, originalToken, mutatedToken, mutationIndex } = mutationResult;
+    const {
+      mutatedPayloadText,
+      mutatedPayloadObject,
+      originalToken,
+      mutatedToken,
+      mutationIndex,
+      mutationPath,
+    } = mutationResult;
     
-    setVerifyProofInput(mutatedPayload);
+    setVerifyProofInput(mutatedPayloadText);
     setProofTampered(true);
 
-    setTimeout(() => {
+    setVerifierTerminalLines((current) => [
+      ...current,
+      `attacker:: mutated field ${mutationPath} at index ${mutationIndex}`,
+      `attacker:: original hash: ${originalToken.slice(0, 18)}...`,
+      `attacker:: mutated hash:  ${mutatedToken.slice(0, 18)}...`,
+      "backend:: sending mutated proof to /api/zk/verify",
+    ]);
+
+    try {
+      const verifyRequest = buildVerifyRequest(mutatedPayloadObject);
+      const response = await fetch("/api/zk/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(verifyRequest),
+      });
+
+      const verifyBody = (await response.json()) as ZkVerifyResponse & { error?: string };
+      const verifierLog = verifyBody.verifierLog ?? [];
+      const passed = verifyBody.isValid && verifyBody.verifierPhase === "passed";
+
       setVerifierTerminalLines((current) => [
         ...current,
-        `attacker:: hash nibble flipped at position ${mutationIndex}`,
-        `attacker:: original hash: ${originalToken.slice(0, 18)}...`,
-        `attacker:: mutated hash:  ${mutatedToken.slice(0, 18)}...`,
-        "verifier:: pairing equation verification active",
-        "⚠️  Checking: proof against verification key...",
-        "e(proof[C], vk[K]) != e(proof[A] + proof[B], vk[1])",
-        "❌ VERIFICATION FAILED: Pairing equation mismatch",
-        "Even a single bit flip in the cryptographic proof breaks the mathematical seal.",
-        "This proves the proof is tamper-proof and collision-resistant.",
+        `backend:: /api/zk/verify responded with HTTP ${response.status}`,
       ]);
+
+      if (verifierLog.length > 0) {
+        queueVerifierTerminalLines(verifierLog, setVerifierTerminalLines);
+      }
+
+      const verificationResultDelayMs = 200 + verifierLog.length * 240 + 120;
+      globalThis.setTimeout(() => {
+        setVerifierPhase(passed ? "passed" : "failed");
+        setZkVerificationResult(passed ? "Unexpectedly Verified" : "Proof Tampered");
+        setVerifierTerminalLines((current) => [
+          ...current,
+          passed
+            ? "WARN: mutated proof unexpectedly passed backend verification"
+            : `FAIL: backend verifier rejected mutated proof (${verifyBody.verificationReasonCode || "unknown"})`,
+          passed
+            ? "verifier:: investigate proof mutation strategy and backend checks"
+            : `verifier:: ${verifyBody.message || "Pairing equation mismatch detected"}`,
+        ]);
+      }, verificationResultDelayMs);
+
+      if (passed) {
+        setSabotageMessage("WARN: Mutated proof passed verification unexpectedly. Inspect verifier path.");
+      } else {
+        setSabotageMessage("FAIL: Sabotage failed: Backend verifier detected proof tampering.");
+      }
+    } catch (error) {
       setVerifierPhase("failed");
-      setZkVerificationResult("Proof Tampered");
-      setSabotageMessage("❌ Sabotage Failed: Cryptographic pairing detects tampering instantly.");
-    }, 600);
+      setZkVerificationResult("Verification Failed");
+      setSabotageMessage("FAIL: Sabotage failed: backend verification request could not complete.");
+      setVerifierTerminalLines((current) => [
+        ...current,
+        "backend:: request to /api/zk/verify failed before verdict",
+        `ERROR: ${error instanceof Error ? error.message : "Unknown verification error"}`,
+      ]);
+    }
   }
 
   const transferEnabled = merkleCompleted && zkPayload !== null && !loadingSnapshot && proverPhase === "settled";
@@ -715,28 +1003,28 @@ export default function Home() {
         id: "input",
         label: "01",
         title: "Enter balances",
-        description: "Prepare the exchange accounts and choose the focus account for the snapshot.",
+        description: "Prepare exchange accounts. Private inputs: accountId + balance per user.",
         href: "#step-input",
       },
       {
         id: "tree",
         label: "02",
         title: "Build Merkle tree",
-        description: "Generate the snapshot and watch the inclusion path form.",
+        description: "SHA-256 Merkle Sum Tree commits to all balances. Root becomes a public signal.",
         href: "#step-tree",
       },
       {
         id: "proof",
-        label: "03",
-        title: "Generate zk proof",
-        description: "Bind the public Merkle root and solvency status into one proof flow.",
+        label: "03A",
+        title: "Merkle Inclusion Proof",
+        description: "SHA-256 Merkle Sum Tree proves a user's balance is included in the committed root. O(log n) path.",
         href: "#step-proof",
       },
       {
         id: "verify",
-        label: "04",
-        title: "Verify and inspect",
-        description: "Check the proof, inspect the transcript, and review the tamper tests.",
+        label: "03B",
+        title: "zk-SNARK Solvency Proof",
+        description: "PLONK over BN254 proves reserves ≥ liabilities without revealing any private balance or total sum.",
         href: "#step-proof",
       },
     ],
@@ -775,13 +1063,14 @@ export default function Home() {
         <div className="step-heading">
           <span className="step-index">STEP 1</span>
           <h2 className="step-title">Input Merkle Data</h2>
-          <p className="ml-auto text-xs text-slate-400">Start here and keep the flow linear.</p>
         </div>
 
         <UserInputTable
           rows={rows}
           selectedUserId={selectedUserId}
+          reservesInput={reservesInput}
           rowErrors={rowErrors}
+          reservesError={reservesError ?? currentReservesError}
           formError={formError}
           submitting={loadingSnapshot}
           onRowChange={onRowChange}
@@ -789,6 +1078,7 @@ export default function Home() {
           onRemoveRow={onRemoveRow}
           onResetSample={onResetSample}
           onSelectedUserChange={handleSelectedUserChange}
+          onReservesChange={handleReservesChange}
           onGenerate={handleGenerateMerkleTree}
         />
       </section>
@@ -832,8 +1122,8 @@ export default function Home() {
       <section id="step-proof" className="step-shell border-lime-400/30 scroll-mt-6">
         <div className="step-heading">
           <span className="step-index">STEP 3</span>
-          <h2 className="step-title">zk-SNARK Proof Stream</h2>
-          <p className="ml-auto text-xs text-slate-400">Proof generation, verification, and inspection happen here.</p>
+          <h2 className="step-title">Proof System: Merkle and zk-SNARK</h2>
+            
         </div>
 
         {merkleCompleted ? (
@@ -868,7 +1158,7 @@ export default function Home() {
           />
         ) : (
           <div className="mt-4 rounded-2xl border border-slate-500/40 bg-slate-950/60 p-6 text-sm text-slate-300">
-            Complete Step 2 animation to unlock zk-SNARK visualization.
+            Complete Step 2 animation to unlock separate Merkle-link and zk-proof visualization.
           </div>
         )}
       </section>

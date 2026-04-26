@@ -39,4 +39,5 @@ proofs/Solvency_*_js/
 proofs/circuits/
 
 node_modules/
+**/node_modules/
 .early.coverage

@@ -15,6 +15,15 @@ export type SnapshotRequest = {
   selectedUserId?: string;
 };
 
+export type ZkVisualizationRequest = {
+  users: Array<{
+    accountId: string;
+    balance: number | string;
+  }>;
+  merkleRoot?: string;
+  reserves?: string;
+};
+
 export type MerkleNodePayload = {
   nodeId: string;
   level: number;
@@ -177,11 +186,27 @@ export type ZkVerificationPayload = {
   merkleRootPublic: string;
 };
 
+export type MerkleProofVerificationPayload = {
+  userId: string;
+  userBalance: string;
+  rootHash: string;
+  rootSum?: string;
+  proof: Array<{
+    hash: string;
+    position: "left" | "right" | "self";
+    siblingSum?: string;
+  }>;
+};
+
 export type ZkVerifyRequest = {
   verificationPayload: ZkVerificationPayload;
   verifyRoot: string;
   verifyAddress: string;
-  knownAccountIds: string[];
+  knownAccounts: Array<{
+    accountId: string;
+    balance: string;
+  }>;
+  merkleProof: MerkleProofVerificationPayload | null;
 };
 
 export type ZkVerifyResponse = {
@@ -191,7 +216,12 @@ export type ZkVerifyResponse = {
     | "ok"
     | "missing-verification-input"
     | "unknown-address"
+    | "unknown-account-balance"
     | "malformed-proof-payload"
+    | "missing-merkle-proof"
+    | "merkle-proof-user-mismatch"
+    | "merkle-proof-root-mismatch"
+    | "merkle-proof-invalid"
     | "public-root-mismatch"
     | "signal-root-mismatch"
     | "missing-verification-key"

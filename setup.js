@@ -151,27 +151,36 @@ function generateKeys(circuitIndex, ptauPath) {
         `Export verification key for N=${N}`
       );
 
-    // If both exist already, keep them.
-    if (!fs.existsSync(zkeyPath) || !fs.existsSync(vkeyPath)) {
-      // If vkey is missing, force a fresh zkey generation to avoid using stale/corrupt zkey.
-      if (!fs.existsSync(vkeyPath)) {
-        if (fs.existsSync(zkeyPath)) {
-          fs.rmSync(zkeyPath, { force: true });
-        }
-      }
+    const hasZkey = fs.existsSync(zkeyPath);
+    const hasVkey = fs.existsSync(vkeyPath);
+    const r1csMtimeMs = fs.statSync(r1csPath).mtimeMs;
+    const zkeyMtimeMs = hasZkey ? fs.statSync(zkeyPath).mtimeMs : 0;
+    const vkeyMtimeMs = hasVkey ? fs.statSync(vkeyPath).mtimeMs : 0;
 
-      if (!fs.existsSync(zkeyPath)) {
-        if (!tryGenerateZkey()) {
-          failedVariants.push(N);
-          continue;
-        }
-      }
+    // Rebuild keys whenever the circuit was recompiled after key generation.
+    const needsFreshZkey = !hasZkey || zkeyMtimeMs < r1csMtimeMs;
+    const needsFreshVkey = !hasVkey || vkeyMtimeMs < zkeyMtimeMs || needsFreshZkey;
 
-      if (!fs.existsSync(vkeyPath)) {
-        if (!tryExportVkey()) {
-          failedVariants.push(N);
-          continue;
-        }
+    if (needsFreshZkey) {
+      if (hasZkey) {
+        fs.rmSync(zkeyPath, { force: true });
+      }
+      if (fs.existsSync(vkeyPath)) {
+        fs.rmSync(vkeyPath, { force: true });
+      }
+      if (!tryGenerateZkey()) {
+        failedVariants.push(N);
+        continue;
+      }
+    }
+
+    if (needsFreshVkey) {
+      if (fs.existsSync(vkeyPath)) {
+        fs.rmSync(vkeyPath, { force: true });
+      }
+      if (!tryExportVkey()) {
+        failedVariants.push(N);
+        continue;
       }
     }
 
