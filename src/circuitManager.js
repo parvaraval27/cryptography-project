@@ -4,12 +4,6 @@ const path = require("path");
 const PROOFS_DIR = path.join(__dirname, "..", "proofs");
 const CIRCUIT_INDEX_PATH = path.join(PROOFS_DIR, "circuit-index.json");
 
-/**
- * Circuit Manager
- * Handles dynamic circuit selection based on user count
- * Manages multi-circuit artifacts (16, 32, 64, 128, 256 user variants)
- */
-
 class CircuitManager {
   constructor() {
     this.index = null;
@@ -27,10 +21,6 @@ class CircuitManager {
     this.index = JSON.parse(fs.readFileSync(CIRCUIT_INDEX_PATH, "utf-8"));
   }
 
-  /**
-   * Select best circuit variant for user count
-   * Returns the circuit size N and artifact information
-   */
   selectCircuitForUserCount(userCount) {
     if (!Number.isInteger(userCount) || userCount < 1) {
       throw new Error(`Invalid user count: ${userCount}. Must be positive integer.`);
@@ -46,7 +36,6 @@ class CircuitManager {
       );
     }
 
-    // Select smallest variant that fits
     const selectedN = variants.find((n) => n >= userCount);
 
     if (!selectedN) {
@@ -62,9 +51,6 @@ class CircuitManager {
     };
   }
 
-  /**
-   * Get full artifact paths for a specific circuit variant
-   */
   getCircuitArtifacts(n) {
     if (!this.index.mapping[n]) {
       throw new Error(`Circuit variant N=${n} not found in index`);
@@ -78,7 +64,6 @@ class CircuitManager {
       vkey: path.join(PROOFS_DIR, mapping.vkey)
     };
 
-    // Validate artifacts exist
     const requiredArtifacts = ["wasm", "zkey", "vkey"];
     for (const type of requiredArtifacts) {
       if (!fs.existsSync(artifacts[type])) {
@@ -89,16 +74,10 @@ class CircuitManager {
     return artifacts;
   }
 
-  /**
-   * Get list of all supported user counts
-   */
   getSupportedUserCounts() {
     return this.index.variants;
   }
 
-  /**
-   * Verify all circuits are properly compiled
-   */
   ensureCircuitsCompiled() {
     const variants = this.index.variants;
     const missing = [];
@@ -121,15 +100,11 @@ class CircuitManager {
     return true;
   }
 
-  /**
-   * Get circuit index metadata
-   */
   getIndex() {
     return this.index;
   }
 }
 
-// Singleton instance
 let instance = null;
 
 function getCircuitManager() {

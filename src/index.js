@@ -16,7 +16,6 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-// Step 1: Input users
 let users = [];
 
 function inputUsers(n, count = 0) {
@@ -32,7 +31,6 @@ function inputUsers(n, count = 0) {
   });
 }
 
-// Main menu
 function showMainMenu() {
   console.log("\n═══════════════════════════════════════════════════");
   console.log("        EXCHANGE SOLVENCY PROOF SYSTEM");
@@ -77,7 +75,6 @@ function showMainMenu() {
   });
 }
 
-// Mode 1: Build and display Merkle tree
 function merkleTreeMode() {
   console.log("\n🌳 Building Merkle Tree...\n");
   
@@ -93,7 +90,6 @@ function merkleTreeMode() {
   showMainMenu();
 }
 
-// Mode 2: Prove solvency
 function solvencyProverMode() {
   console.log("\n🔐 Solvency Proof Generation Mode");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -107,7 +103,6 @@ function solvencyProverMode() {
       const balances = users.map(u => BigInt(u.balance));
       const merkleRoot = getMerkleRootForCircuit(users);
 
-      // Calculate actual sum for reference
       const actualSum = balances.reduce((a, b) => a + b, BigInt(0));
 
       console.log("\n📊 Proof Parameters:");
@@ -122,7 +117,6 @@ function solvencyProverMode() {
         return;
       }
 
-      // Generate proof
       await generateAndProve(balances, reserves, {
         verify: true,
         merkleRoot,
@@ -138,7 +132,6 @@ function solvencyProverMode() {
   });
 }
 
-// Mode 3: Verify Merkle inclusion
 function merkleVerifierMode() {
   console.log("\n🔍 Merkle Inclusion Proof Verification");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -178,7 +171,6 @@ function merkleVerifierMode() {
   });
 }
 
-// Mode 4: Verify solvency proof
 function solvencyVerifierMode() {
   console.log("\n✔️ Solvency Proof Verification");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -197,7 +189,6 @@ function solvencyVerifierMode() {
     });
 }
 
-// Mode 5: Full verification (Merkle + zk-SNARK)
 function fullVerificationMode() {
   console.log("\n🔐 Full Verification Mode");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -229,7 +220,6 @@ function fullVerificationMode() {
       return;
     }
 
-    // Now verify solvency
     const proofPath = require("path").join(__dirname, "../proofs/solvency_proof.json");
     try {
       const solvencyValid = await loadAndVerifyProof(proofPath);
@@ -248,7 +238,6 @@ function fullVerificationMode() {
   });
 }
 
-// Show balances (for demo purposes)
 function showBalances() {
   console.log("\n💰 User Balances:");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -261,7 +250,6 @@ function showBalances() {
   showMainMenu();
 }
 
-// Start
 console.log("═══════════════════════════════════════════════════");
 console.log("    EXCHANGE SOLVENCY & MERKLE PROOF SYSTEM");
 console.log("═══════════════════════════════════════════════════\n");

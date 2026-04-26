@@ -71,13 +71,11 @@ function normalizeBalances(balances, maxUsers) {
 function normalizeMerkleRoot(merkleRoot) {
   const rootStr = String(merkleRoot ?? "0").trim();
   
-  // If it's a hex string (64 chars or 66 with 0x prefix), convert to decimal
   if (/^(0x)?[a-fA-F0-9]{64}$/.test(rootStr)) {
     const hex = rootStr.startsWith("0x") ? rootStr : "0x" + rootStr;
     return BigInt(hex).toString();
   }
   
-  // Otherwise, validate it's a valid decimal number
   if (!/^\d+$/.test(rootStr)) {
     throw new Error(`Invalid merkle root format: must be hex string or decimal number, got "${rootStr}"`);
   }

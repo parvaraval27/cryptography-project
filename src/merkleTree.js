@@ -1,6 +1,5 @@
 const { hashLeaf, hashNode } = require("./utils");
 
-// Step 1: Create leaves (sorted for determinism)
 function createLeaves(users) {
   const sorted = [...users].sort((a, b) => a.id.localeCompare(b.id));
 
@@ -11,7 +10,6 @@ function createLeaves(users) {
   }));
 }
 
-// Step 2: Build tree
 function buildTree(leaves) {
   let level = leaves;
 
@@ -23,7 +21,6 @@ function buildTree(leaves) {
       let right = level[i + 1];
 
       if (!right) {
-        // Unpaired node - hash with itself but count sum only once
         nextLevel.push({
           hash: hashNode(left.hash, left.hash),
           sum: left.sum
@@ -42,7 +39,6 @@ function buildTree(leaves) {
   return level[0];
 }
 
-// Step 3: Generate proof (WITH direction)
 function getMerkleProof(leaves, index) {
   let proof = [];
   let level = leaves;
@@ -56,16 +52,12 @@ function getMerkleProof(leaves, index) {
 
       if (i === index || i + 1 === index) {
         if (i === index && right) {
-          // Left is the target, right is the sibling
           proof.push({ hash: right.hash, siblingSum: right.sum.toString(), position: "right" });
         } else if (i + 1 === index && right) {
-          // Right is the target, left is the sibling
           proof.push({ hash: left.hash, siblingSum: left.sum.toString(), position: "left" });
         } else if (i === index && !right) {
-          // Unpaired node hashes with itself
           proof.push({ hash: left.hash, siblingSum: left.sum.toString(), position: "self" });
         }
-        // If target node is unpaired at higher levels, it will be handled the same way
         index = Math.floor(i / 2);
       }
 
@@ -88,7 +80,6 @@ function getMerkleProof(leaves, index) {
   return proof;
 }
 
-// Step 4: Verify proof
 function verifyProof(user, proof, rootHash, expectedRootSum = null) {
   let currentHash = hashLeaf(user.id, user.balance);
   let currentSum = BigInt(user.balance);

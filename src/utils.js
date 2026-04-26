@@ -1,6 +1,5 @@
 const { createHash } = require("crypto");
 
-// safer encoding
 function hashLeaf(id, balance) {
   return createHash("sha256").update(`${id}:${balance}`).digest("hex");
 }

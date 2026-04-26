@@ -1,14 +1,3 @@
-/**
- * Example: Programmatic Usage of Solvency Proof System
- * 
- * This example demonstrates:
- * 1. Building a Merkle tree
- * 2. Generating a solvency proof
- * 3. Verifying both proofs
- * 
- * Run: node examples/demo.js
- */
-
 const {
   createLeaves,
   buildTree,
@@ -28,7 +17,6 @@ async function demo() {
   console.log("   ZK-SNARK SOLVENCY PROOF - DEMO");
   console.log("═══════════════════════════════════════════════════\n");
 
-  // Example: Exchange with 4 users
   const users = [
     { id: "Alice", balance: 100 },
     { id: "Bob", balance: 50 },
@@ -49,9 +37,6 @@ async function demo() {
   console.log(`Exchange reserves: ${reserves.toString()}`);
   console.log(`Solvent? ${totalBalances <= reserves ? "✅ YES" : "❌ NO"}\n`);
 
-  // ═══════════════════════════════════════════════════
-  // PART 1: Merkle Tree
-  // ═══════════════════════════════════════════════════
 
   console.log("═══════════════════════════════════════════════════");
   console.log("PART 1: MERKLE TREE PROOF");
@@ -65,7 +50,6 @@ async function demo() {
   console.log(`   Hash: ${root.hash.substring(0, 16)}...`);
   console.log(`   Total sum: ${root.sum.toString()}`);
 
-  // User verifies their inclusion
   console.log("\n👤 Alice verifies her balance is included...");
   const aliceIndex = leaves.findIndex(u => u.id === "Alice");
   const aliceMerkleProof = getMerkleProof(leaves, aliceIndex);
@@ -82,9 +66,6 @@ async function demo() {
   console.log(`   Alice's balance IS included in the Merkle tree`);
   console.log(`   Root sum consistency verified: ${root.sum.toString()}`);
 
-  // ═══════════════════════════════════════════════════
-  // PART 2: zk-SNARK Solvency Proof
-  // ═══════════════════════════════════════════════════
 
   console.log("\n═══════════════════════════════════════════════════");
   console.log("PART 2: ZK-SNARK SOLVENCY PROOF");
@@ -102,10 +83,7 @@ async function demo() {
       savePath: path.join(__dirname, "../proofs/solvency_proof.json")
     });
 
-    // ═══════════════════════════════════════════════════
-    // PART 3: Full Verification
-    // ═══════════════════════════════════════════════════
-
+    
     console.log("\n═══════════════════════════════════════════════════");
     console.log("PART 3: FULL VERIFICATION");
     console.log("═══════════════════════════════════════════════════\n");
@@ -140,10 +118,7 @@ async function demo() {
       console.log("   ✔️  Total liabilities remain hidden\n");
     }
 
-    // ═══════════════════════════════════════════════════
-    // PART 4: What Verifier Knows vs. Doesn't Know
-    // ═══════════════════════════════════════════════════
-
+ 
     console.log("═══════════════════════════════════════════════════");
     console.log("WHAT THE VERIFIER KNOWS");
     console.log("═══════════════════════════════════════════════════\n");
@@ -174,5 +149,4 @@ async function demo() {
   }
 }
 
-// Run demo
 demo().catch(console.error);
